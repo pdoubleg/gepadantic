@@ -1,0 +1,53 @@
+{
+  "best_candidate": {
+    "instructions": "Predict whether a given Titanic passenger survived the disaster, using the provided features. Use the following domain-specific survival patterns, extracted from historical Titanic data and observed in prior task examples:\n- 'Women and children first' was strongly enforced: females and children under 15 had notably higher survival rates, even if in lower classes.\n- First-class passengers survived at higher rates than second class, who survived more than third class; however, being female or a child typically outweighed class.\n- Adult males, even in first class or with high fares, usually had low survival chances unless accompanied by a family group providing extra protection (e.g., a child or female relative).\n- Higher fares often, but not always, reflect higher class and better cabin location (closer lifeboat access), but the effect is minor compared to sex and age.\n- Boarding port (C, Q, S) had a minimal survival effect versus other factors, but boarding from Cherbourg (C) slightly favored first-class survival due to proximity to lifeboats. Otherwise, this feature is rarely decisive.\n- Group/family size had nuanced effects: children or women with family often survived, but large adult male groups had little advantage. Solo adults, particularly men, had lower survival odds.\n\nStrategy: Explicitly prioritize sex and age. If the passenger is female or a child (under 15), their survival probability increases substantially, regardless of other features. If adult male, survival is rare except in specific family-travel situations in first class. Weigh all features, but do not let fare or port override the main historical patterns. Always support predictions with clear reference to these domain rules.\n\nJustify each prediction by referencing:\n1. Sex (with highest weight)\n2. Age (children under 15 highly favored)\n3. Class (first > second > third)\n4. Family group status\n5. Fare (as a secondary modifier)\n6. Embarkation port (only as a minor tiebreaker)\n\nProvide:\n- Survival prediction (yes/no)\n- Confidence (0-1, higher when sex/age makes outcome clear)\n- Detailed stepwise reasoning (reference above rules for each)\n\nExample:\nInput: class=1, sex=female, age=12, sibsp=2, parch=1, fare=52, embarked=C\nOutput: survived: yes, confidence: 0.97, reasoning: Female child in 1st class, with family, all of which are primary predictors of survival in historical records. High fare and Cherbourg embarkation reinforce this. All major factors point to survival.\n\nInput: class=3, sex=male, age=21, sibsp=0, parch=0, fare=7.7, embarked=Q\nOutput: survived: no, confidence: 0.83, reasoning: Young adult male in third class traveling alone and paying a low fare. All key factors align to low survival odds, as seen in Titanic records.",
+    "tool:final_result:description": "Provide a survival prediction for the Titanic passenger, specifying:\n- Did the passenger survive ('yes' or 'no'), based on the composite historical patterns (sex, age, class, family, fare, port)?\n- Confidence score (0-1), expressing how strongly the input matches known survivor or non-survivor profiles (sex and age being most determinative).\n- A clear, feature-by-feature explanation referencing the prioritized impact of sex, age, class, family grouping, fare, and port, and connecting these to known survival statistics. Explicitly clarify any tradeoffs, exceptions, or special circumstances in the profile.",
+    "tool:final_result:param:survived": "'yes' if the passenger matches high-survival historical profiles (female, or child under 15, especially in first/second class with family, or any class female/child); 'no' otherwise, particularly for adult males, solo travelers, or third class males.",
+    "tool:final_result:param:confidence": "Numerical value (0.01-1) representing how closely the passenger matches typical survivor/non-survivor groups, with the highest confidence when sex/age/class strictly align (e.g. female/child in 1st class, adult male in 3rd class). Lower confidence if features are mixed or edge-case.",
+    "tool:final_result:param:reasoning": "Thoroughly justify the outcome by:\n- Explicitly weighing each feature: sex (strongest), age (children next), class (significant), family/group, fare, and port.\n- Reference historical survival rates: e.g., only 20% of adult males survived overall (even fewer in lower classes), vs. over 70% of females and most children.\n- Mention special exceptions\u2014e.g., some first-class adult males survived (if with family, near boats, or other rare cases)\nConclude with a direct summary: \"Given this passenger's profile and the Titanic data, survival is (likely/unlikely) because...\"",
+    "signature:PassengerInput:instructions": "These features correspond to a specific Titanic passenger. Use them in conjunction with historical Titanic survival data (especially the sex, age, and class prioritization found in the dataset) to produce a survival prediction and a transparent explanation of why.",
+    "signature:PassengerInput:passenger_class:desc": "Passenger ticket class: 1=First (highest survival), 2=Second, 3=Third (lowest survival). Class influences both physical cabin location and priority in evacuation.",
+    "signature:PassengerInput:sex:desc": "Passenger's sex (male/female). Sex was the strongest predictor\u2014females of any class were far more likely to survive due to evacuation policy.",
+    "signature:PassengerInput:age:desc": "Passenger's age in years. Children under 15 had a much greater chance of survival than adults\u2014especially in the presence of family or if female.",
+    "signature:PassengerInput:siblings_spouses:desc": "Count of siblings/spouses traveling together. Traveling with family could modestly increase odds for women and children, but gave little benefit to adult males; large all-male groups did not improve survival.",
+    "signature:PassengerInput:parents_children:desc": "Count of parents/children accompanying the passenger. Children with parents, or mothers with children, had higher survival rates; adult males with children typically did not.",
+    "signature:PassengerInput:fare:desc": "Fare paid (in British pounds). Higher fares are a proxy for first-class travel and better cabin placement, increasing survival odds but having lesser effect than sex or age.",
+    "signature:PassengerInput:embarked:desc": "Port of embarkation: C=Cherbourg, Q=Queenstown, S=Southampton, Unknown if not specified. Port rarely affected survival compared to class or sex, but could modestly interact with class/location (e.g. Cherbourg/first class near lifeboats)."
+  },
+  "best_score": 0.8863333333333333,
+  "original_candidate": {
+    "instructions": "Predict the survival of the Titanic passenger based on the given features.",
+    "tool:final_result:description": "Output prediction for Titanic survival.",
+    "tool:final_result:param:survived": "Whether the passenger survived",
+    "tool:final_result:param:confidence": "Confidence score between 0 and 1",
+    "tool:final_result:param:reasoning": "Detailed explanation of the prediction based on the features",
+    "signature:PassengerInput:instructions": "Input features for Titanic survival prediction.",
+    "signature:PassengerInput:passenger_class:desc": "Passenger class (1=First, 2=Second, 3=Third)",
+    "signature:PassengerInput:sex:desc": "Passenger's sex",
+    "signature:PassengerInput:age:desc": "Passenger's age in years",
+    "signature:PassengerInput:siblings_spouses:desc": "Number of siblings/spouses aboard",
+    "signature:PassengerInput:parents_children:desc": "Number of parents/children aboard",
+    "signature:PassengerInput:fare:desc": "Passenger fare paid in pounds",
+    "signature:PassengerInput:embarked:desc": "Port of embarkation (C=Cherbourg, Q=Queenstown, S=Southampton)"
+  },
+  "original_score": 0.5297333333333333,
+  "num_iterations": 10,
+  "num_metric_calls": 252,
+  "gepa_usage": {
+    "input_tokens": 1368135,
+    "cache_write_tokens": 0,
+    "cache_read_tokens": 1920,
+    "output_tokens": 65269,
+    "input_audio_tokens": 0,
+    "cache_audio_read_tokens": 0,
+    "output_audio_tokens": 0,
+    "details": {
+      "accepted_prediction_tokens": 0,
+      "audio_tokens": 0,
+      "reasoning_tokens": 0,
+      "rejected_prediction_tokens": 0
+    },
+    "requests": 255,
+    "tool_calls": 0
+  }
+}
