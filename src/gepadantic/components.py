@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from collections.abc import Iterator, Sequence
 from contextlib import ExitStack, contextmanager
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from pydantic.fields import FieldInfo
 from pydantic_ai.agent.wrapper import WrapperAgent
 
 from .signature import InputSpec, build_input_spec
@@ -245,3 +246,184 @@ def apply_candidate_to_agent_and_signature(
             stack.enter_context(spec.apply_candidate(candidate))
 
         yield
+
+ModelT = TypeVar("ModelT", bound=BaseModel)
+
+
+def create_model_from_candidate(
+    model_cls: type[ModelT],
+    candidate: dict[str, str],
+    *,
+    model_type: Literal["signature", "tool"] = "signature",
+    tool_name: str | None = None,
+) -> type[ModelT]:
+    """Create a new Pydantic model with descriptions updated from a candidate dictionary.
+    
+    This function creates a new model class with updated docstring and field descriptions
+    based on the optimization candidate. It handles both signature-type models (input models)
+    and tool-type models (output/result models).
+    
+    Args:
+        model_cls: The original Pydantic BaseModel class to update.
+        candidate: Dictionary mapping component keys to optimized text values.
+            For signature models, keys are:
+                - "signature:{ModelName}:instructions" -> model.__doc__
+                - "signature:{ModelName}:{field_name}:desc" -> Field description
+            For tool models, keys are:
+                - "tool:{tool_name}:description" -> model.__doc__
+                - "tool:{tool_name}:param:{field_name}" -> Field description
+        model_type: Type of model - either "signature" or "tool" (default: "signature").
+        tool_name: For tool models, the name of the tool (often "final_result"). 
+            If None, uses the model class name. Required when the tool name differs
+            from the model class name.
+    
+    Returns:
+        A new model class with updated descriptions. The new class inherits from the
+        original and has the same name, but with modified __doc__ and field descriptions.
+    
+    Example:
+        >>> from pydantic import BaseModel, Field
+        >>> 
+        >>> # Signature model example
+        >>> class EmailInput(BaseModel):
+        ...     '''Analyze email sentiment'''
+        ...     email_text: str = Field(description="The email content")
+        ...
+        >>> candidate = {
+        ...     "signature:EmailInput:instructions": "Analyze facility support emails",
+        ...     "signature:EmailInput:email_text:desc": "Complete email text"
+        ... }
+        >>> UpdatedInput = create_model_from_candidate(
+        ...     EmailInput, candidate, model_type="signature"
+        ... )
+        >>> 
+        >>> # Tool model example (note: tool_name is "final_result")
+        >>> class EmailClassification(BaseModel):
+        ...     '''Classify emails'''
+        ...     urgency: str = Field(description="Urgency level")
+        ...
+        >>> candidate = {
+        ...     "tool:final_result:description": "Comprehensive email analysis",
+        ...     "tool:final_result:param:urgency": "Urgency: high, medium, or low"
+        ... }
+        >>> UpdatedOutput = create_model_from_candidate(
+        ...     EmailClassification, candidate, model_type="tool", tool_name="final_result"
+        ... )
+    """
+    if not issubclass(model_cls, BaseModel):
+        raise TypeError(f"model_cls must be a Pydantic BaseModel subclass, got {type(model_cls)}")
+    
+    if model_type not in ("signature", "tool"):
+        raise ValueError(f"model_type must be 'signature' or 'tool', got {model_type!r}")
+    
+    model_name = model_cls.__name__
+    
+    # For tool models, use the tool_name if provided, otherwise use model class name
+    lookup_name = tool_name if (model_type == "tool" and tool_name) else model_name
+    
+    # Determine the key prefix based on model type
+    if model_type == "signature":
+        instructions_key = f"signature:{lookup_name}:instructions"
+        field_key_template = f"signature:{lookup_name}:{{field_name}}:desc"
+    else:  # tool
+        instructions_key = f"tool:{lookup_name}:description"
+        field_key_template = f"tool:{lookup_name}:param:{{field_name}}"
+    
+    # Get updated docstring if available
+    updated_doc = candidate.get(instructions_key, model_cls.__doc__)
+    
+    # Create new field definitions with updated descriptions
+    new_fields: dict[str, tuple[Any, FieldInfo]] = {}
+    
+    for field_name, field_info in model_cls.model_fields.items():
+        # Get the field key for this specific field
+        field_key = field_key_template.format(field_name=field_name)
+        
+        # Check if there's an updated description in the candidate
+        updated_description = candidate.get(field_key)
+        
+        if updated_description is not None:
+            # Create a new FieldInfo with the updated description
+            # Preserve all other field properties
+            new_field_info = Field(
+                default=field_info.default,
+                default_factory=field_info.default_factory,
+                alias=field_info.alias,
+                title=field_info.title,
+                description=updated_description,  # Updated description
+                exclude=field_info.exclude,
+                frozen=field_info.frozen,
+                validate_default=field_info.validate_default,
+                repr=field_info.repr,
+                init=field_info.init,
+                init_var=field_info.init_var,
+                kw_only=field_info.kw_only,
+                json_schema_extra=field_info.metadata,
+            )
+            new_fields[field_name] = (field_info.annotation, new_field_info)
+        else:
+            # Keep the original field as-is
+            new_fields[field_name] = (field_info.annotation, field_info)
+    
+    # Create a new model class with the updated fields and docstring
+    from pydantic import create_model
+    
+    NewModel = create_model(
+        model_name,
+        __base__=model_cls,
+        __doc__=updated_doc,
+        **new_fields,  # type: ignore[arg-type]
+    )
+    
+    return NewModel  # type: ignore[return-value]
+
+
+def apply_candidate_to_signature_model(
+    model_cls: type[ModelT],
+    candidate: dict[str, str],
+) -> type[ModelT]:
+    """Create a new signature model with descriptions updated from a candidate.
+    
+    This is a convenience wrapper around create_model_from_candidate for signature-type
+    models (input models). It updates the model's __doc__ (instructions) and field
+    descriptions based on keys in the candidate dictionary.
+    
+    Args:
+        model_cls: The original signature model class.
+        candidate: Dictionary with keys like:
+            - "signature:{ModelName}:instructions"
+            - "signature:{ModelName}:{field_name}:desc"
+    
+    Returns:
+        A new model class with updated descriptions.
+
+    """
+    return create_model_from_candidate(model_cls, candidate, model_type="signature")
+
+
+def apply_candidate_to_tool_model(
+    model_cls: type[ModelT],
+    candidate: dict[str, str],
+    *,
+    tool_name: str = "final_result",
+) -> type[ModelT]:
+    """Create a new tool model with descriptions updated from a candidate.
+    
+    This is a convenience wrapper around create_model_from_candidate for tool-type
+    models (output/result models). It updates the model's __doc__ (tool description)
+    and field descriptions based on keys in the candidate dictionary.
+    
+    Args:
+        model_cls: The original tool/output model class.
+        candidate: Dictionary with keys like:
+            - "tool:{tool_name}:description"
+            - "tool:{tool_name}:param:{field_name}"
+        tool_name: The name of the tool used during optimization (default: "final_result").
+            This is typically "final_result" for the main output type of an agent.
+    
+    Returns:
+        A new model class with updated descriptions.
+    """
+    return create_model_from_candidate(
+        model_cls, candidate, model_type="tool", tool_name=tool_name
+    )

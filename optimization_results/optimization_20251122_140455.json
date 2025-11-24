@@ -1,0 +1,41 @@
+{
+  "best_candidate": {
+    "instructions": "Read the facility support request email and categorize its urgency, sentiment, and facility support categories, following these definitions and strategies:\n\n1. Urgency: Assess how quickly the request must be addressed:\n   - High: Immediate or same-day action is needed for emergencies, safety concerns, or urgent maintenance issues.\n   - Medium: Needs timely response (next 1-3 days) but is not an emergency\u2014e.g., noticeable declines in service that cause inconvenience or prompt requests for routine work.\n   - Low: Can be scheduled for later (next week or more); applies to non-time-sensitive inquiries or requests for future service.\n   - For scheduling requests with flexibility or suggested time windows (\"in the next couple of weeks\"), choose \"low\" unless there is wording implying urgency.\n\n2. Sentiment: Determine the tone/objective of the message:\n   - Positive: Includes praise, satisfaction, gratitude, or complimentary statements.\n   - Neutral: Factual, professional, or routine inquiries, including polite requests. Presence of customary pleasantries (\"I hope this finds you well,\" \"Thank you\") alone does not indicate positive sentiment.\n   - Negative: Clearly expresses dissatisfaction, frustration, or complaint.\n   - When in doubt (e.g., requests with polite language but no praise/complaints), default to \"neutral.\"\n\n3. Categories: Assign categories only if requested or issues are directly mentioned or strongly implied. Do NOT over-categorize.\n   - cleaning_services_scheduling: Scheduling or rescheduling regular or special cleaning (if the main action is to book/reschedule).\n   - specialized_cleaning_services: Request for deep, carpet, or window cleaning, etc. Only apply if specified.\n   - sustainability_and_environmental_practices: Specific questions or requests about eco-friendly practices or products (praise alone is not enough).\n   - routine_maintenance_requests: Request for regular maintenance (e.g., HVAC check).\n   - customer_feedback_and_complaints: Statement of dissatisfaction, complaint, or critical feedback about previous services. General satisfaction or gratitude is NOT a complaint.\n   - general_inquiries: Information requests unrelated to a specific service action.\n   - quality_and_safety_concerns: Mentions or implies safety or quality issues.\n   - If context is ambiguous, only select a category if supported by email content.\n\nJustify borderline choices (e.g., why something is medium not low, or why a complaint is present). Output a JSON object with keys: urgency, sentiment, categories (list of strings). Each label must be directly supported by the message.\n\nUse these improved criteria and examples for greater accuracy.",
+    "tool:final_result:description": "Analyzes facility support request emails to determine urgency ('high', 'medium', 'low'), sentiment ('positive', 'neutral', 'negative'), and facility categories. Leverages the following principles: \n- Assign 'categories' strictly based on explicit requests or strong implication in the text (not on general satisfaction/praise). \n- 'Urgency' is high only with explicit or implied immediate need; medium for prompt but not immediate; low if scheduling is flexible or non-time-bound. \n- 'Sentiment' is positive only if there is praise or gratitude; neutral for factual, polite, or routine requests. \n- Avoid over-categorization: only multiple labels if clearly warranted according to the content and definitions.\n- Justify difficult or borderline classification based on the email's factual details, not guesswork.",
+    "tool:final_result:param:urgency": "Assign 'high' urgency only when the email indicates emergency, immediate, or same-day action is needed (e.g., hazards, urgent maintenance). Use 'medium' when the sender expects a prompt response (within 1-3 days) due to noticeable service decline or follow-up, but there is no emergency. Apply 'low' for requests or inquiries that are not time-sensitive and can be scheduled at the sender's or provider's convenience, including requests for future appointments with no urgency implied. When the sender is flexible (\"in the next couple of weeks\"), treat as 'low' urgency unless the need is pressing or limits are emphasized.",
+    "tool:final_result:param:sentiment": "Assign 'positive' only if the sender gives explicit praise, satisfaction, or appreciation (e.g., \"fantastic job,\" \"truly appreciate\"). 'Neutral' applies to factual, professional, or routine correspondence\u2014even if polite. Do not confuse standard business pleasantries or professionalism for 'positive.' 'Negative' applies only when there is clear dissatisfaction or complaint. If a message is a straightforward request with no praise or complaint, label as 'neutral.'",
+    "tool:final_result:param:categories": "Select categories only if directly supported by the main focus of the message:\n- cleaning_services_scheduling: Scheduling or rescheduling cleaning (not just mentioning cleaning services).\n- specialized_cleaning_services: Request for deep, carpet, or window cleaning, etc. Only use if specified.\n- sustainability_and_environmental_practices: Only if ecological practices, green certifications, or eco-friendly products are specifically requested or inquired about.\n- routine_maintenance_requests: Services like HVAC checks or regular service calls.\n- customer_feedback_and_complaints: Only if a complaint or negative feedback is explicitly made\u2014do not mark for praise or routine requests.\n- general_inquiries: Only for info requests not about scheduling or complaints.\n- quality_and_safety_concerns: Only if health, safety, or maintenance quality is mentioned or implied as a concern.\nDo not add extra categories unless warranted by the content\u2014avoid over-categorization.",
+    "signature:EmailInput:instructions": "Provide the full email content for classification (urgency, sentiment, facility support categories). The content should be detailed and include all necessary context so automated analysis can be accurate. Avoid omitting key contextual details such as tone, explicit time frames, satisfaction, complaints, or direct requests.",
+    "signature:EmailInput:input:desc": "Facility support request email text, containing all relevant details, including the sender's request, tone, urgency cues, and any explicit or implied feedback. Ensure the text is complete for reliable automated analysis of urgency, sentiment, and support categories."
+  },
+  "best_score": 0.8800000000000001,
+  "original_candidate": {
+    "instructions": "\nRead the following facility support request and analyze it to determine the urgency, sentiment, and categories.\n",
+    "tool:final_result:description": "Analyzes facility support requests.",
+    "tool:final_result:param:urgency": "The urgency of the request",
+    "tool:final_result:param:sentiment": "The sentiment of the request",
+    "tool:final_result:param:categories": "The categories of the request",
+    "signature:EmailInput:instructions": "Input model for email classification.",
+    "signature:EmailInput:input:desc": "The email content to classify"
+  },
+  "original_score": 0.7833333333333334,
+  "num_iterations": 4,
+  "num_metric_calls": 106,
+  "gepa_usage": {
+    "input_tokens": 424636,
+    "cache_write_tokens": 0,
+    "cache_read_tokens": 0,
+    "output_tokens": 15585,
+    "input_audio_tokens": 0,
+    "cache_audio_read_tokens": 0,
+    "output_audio_tokens": 0,
+    "details": {
+      "accepted_prediction_tokens": 0,
+      "audio_tokens": 0,
+      "reasoning_tokens": 0,
+      "rejected_prediction_tokens": 0
+    },
+    "requests": 89,
+    "tool_calls": 0
+  }
+}

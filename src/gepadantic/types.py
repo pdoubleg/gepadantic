@@ -337,10 +337,7 @@ def _serialize_model_message(
 
 @dataclass
 class Trajectory:
-    """Execution trajectory capturing the agent run.
-
-    This is kept minimal for v1 - just enough for reflection.
-    """
+    """Execution trajectory capturing the agent run."""
 
     messages: list[ModelMessage]
     final_output: Any
