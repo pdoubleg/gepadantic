@@ -342,13 +342,15 @@ def optimize_agent_prompts(
         cache_verbose: Whether to log cache hits and misses.
 
         # Logging
+        track_best_outputs: Whether to track best outputs on validation set.
         logger: LoggerProtocol instance for tracking progress.
         run_dir: Directory to save results to.
+        display_progress_bar: Whether to display a progress bar.
+        
+        # MLFlow
         use_mlflow: Whether to use MLflow for logging.
         mlflow_tracking_uri: Tracking URI for MLflow.
         mlflow_experiment_name: Experiment name for MLflow.
-        track_best_outputs: Whether to track best outputs on validation set.
-        display_progress_bar: Whether to display a progress bar.
 
         # Reproducibility
         seed: Random seed for reproducibility.

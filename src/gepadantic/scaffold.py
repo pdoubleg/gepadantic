@@ -23,6 +23,7 @@ from pydantic_ai import Agent
 from pydantic_ai.agent import AbstractAgent
 
 from .lm import get_openai_model
+from .adapter import ReflectionSampler
 from .runner import (
     AUTO_RUN_SETTINGS,
     GepaOptimizationResult,
@@ -44,6 +45,40 @@ class GepaConfig:
     This class captures all parameters needed to run GEPA optimization,
     providing a clean interface for users to configure their optimization runs.
 
+    GEPA is an evolutionary optimizer that evolves (multiple) text components of a complex system to optimize them towards a given metric.
+    GEPA can also leverage rich textual feedback obtained from the system's execution environment, evaluation,
+    and the system's own execution traces to iteratively improve the system's performance.
+
+    Concepts:
+    - System: A harness that uses text components to perform a task. Each text component of the system to be optimized is a named component of the system.
+    - Candidate: A mapping from component names to component text. A concrete instantiation of the system is realized by setting the text of each system component
+      to the text provided by the candidate mapping.
+    - `DataInst`: An (uninterpreted) data type over which the system operates.
+    - `RolloutOutput`: The output of the system on a `DataInst`.
+
+    Each execution of the system produces a `RolloutOutput`, which can be evaluated to produce a score. The execution of the system also produces a trajectory,
+    which consists of the operations performed by different components of the system, including the text of the components that were executed.
+
+    Here we use a custom `PydanticAIGEPAAdapter` that plugs into the canonical GEPA optimization api.
+    The adapter is responsible for:
+    1. Evaluating a proposed candidate on a batch of inputs.
+       - The adapter receives a candidate proposed by GEPA, along with a batch of inputs selected from the training/validation set.
+       - The adapter instantiates the system with the texts proposed in the candidate.
+       - The adapter then evaluates the candidate on the batch of inputs, and returns the scores.
+       - The adapter should also capture relevant information from the execution of the candidate, like system and evaluation traces.
+    2. Identifying textual information relevant to a component of the candidate
+       - Given the trajectories captured during the execution of the candidate, GEPA selects a component of the candidate to update.
+       - The adapter receives the candidate, the batch of inputs, and the trajectories captured during the execution of the candidate.
+       - The adapter is responsible for identifying the textual information relevant to the component to update.
+       - This information is used by GEPA to reflect on the performance of the component, and propose new component texts.
+
+    At each iteration, GEPA proposes a new candidate using one of the following strategies:
+    1. Reflective mutation: GEPA proposes a new candidate by mutating the current candidate, leveraging rich textual feedback.
+    2. Merge: GEPA proposes a new candidate by merging 2 candidates that are on the Pareto frontier.
+
+    GEPA also tracks the Pareto frontier of performance achieved by different candidates on the validation set. This way, it can leverage candidates that
+    work well on a subset of inputs to improve the system's performance on the entire validation set, by evolving from the Pareto frontier.
+
     Args:
         agent: The agent to optimize. Can be provided instead of agent_model and agent_instructions.
         agent_model: The model name or Model instance for the agent (e.g., "gpt-4.1-mini").
@@ -62,11 +97,12 @@ class GepaConfig:
         reflection_minibatch_size: Number of examples to use for reflection in each proposal (default: 3).
         perfect_score: The perfect score value to achieve (default: 1).
         skip_perfect_score: Whether to skip updating if perfect score achieved on minibatch (default: True).
-        module_selector: Which components to optimize - "all", "round_robin", etc. (default: "round_robin").
+        reflection_sampler: Optional sampler for reflection records. If provided, it will be called to sample records when needed. If None, all reflection records are kept.
+        module_selector: Component selection strategy. Can be a ReflectionComponentSelector instance or a string ('round_robin', 'all'). Defaults to 'all'. The 'round_robin' strategy cycles through components in order. The 'all' strategy selects all components for modification in every GEPA iteration.
         candidate_selection_strategy: Strategy for selecting candidates - "pareto", "current_best", "epsilon_greedy", etc. (default: "pareto").
         use_merge: Whether to use the merge strategy for combining candidates (default: False).
         max_merge_invocations: Maximum number of merge invocations to perform (default: 5).
-        merge_val_overlap_floor: Minimum number of validation examples to overlap between merge candidates (default: 5).
+        merge_val_overlap_floor: Minimum number of shared validation ids required between parents before attempting a merge subsample. Only relevant when using `val_evaluation_policy` other than `full_eval`.
         stop_callbacks: Stopper conditions for stopping optimization (default: None).
         display_progress_bar: Whether to show progress bar during optimization (default: True).
         track_best_outputs: Whether to track best outputs for analysis (default: True).
@@ -79,13 +115,14 @@ class GepaConfig:
         use_mlflow: Whether to use MLflow for logging (default: False).
         mlflow_tracking_uri: Tracking URI for MLflow (default: None).
         mlflow_experiment_name: Experiment name for MLflow (default: None).
+        seed: Random seed for reproducibility (default: 0).
+        raise_on_exception: Whether to raise exceptions or continue on errors (default: True).
 
     Example:
 
     ```python
         >>> from pydantic import BaseModel, Field
-        >>> from gepadantic.scaffold import GepaConfig, run_optimization_pipeline
-        >>> from gepadantic.data_utils import split_dataset
+        >>> from gepadantic import GepaConfig, run_optimization_pipeline, split_dataset
         >>>
         >>> class MyInput(BaseModel):
         ...     text: str = Field(description="Input text")
@@ -99,10 +136,11 @@ class GepaConfig:
         ...     return 0.0, "Failed to produce output"
         >>>
         >>> # Split dataset into train and validation
-        >>> trainset, valset = split_dataset(my_dataset, train_ratio=0.7)
+        >>> trainset, valset = split_dataset(dataset, train_ratio=0.7)
         >>>
         >>> config = GepaConfig(
-        ...     agent_model="gpt-4.1-mini",
+        ...     agent_model="gpt-4.1-nano",
+        ...     reflection_model="gpt-4.1",
         ...     agent_instructions="Classify the input text",
         ...     input_type=MyInput,
         ...     output_type=MyOutput,
@@ -145,6 +183,7 @@ class GepaConfig:
     reflection_minibatch_size: int = 3
     perfect_score: int = 1
     skip_perfect_score: bool = True
+    reflection_sampler: ReflectionSampler | None = None
 
     # Component selection options
     module_selector: ReflectionComponentSelector | Literal["round_robin", "all"] = "all"
@@ -178,6 +217,10 @@ class GepaConfig:
     use_mlflow: bool = False
     mlflow_tracking_uri: str | None = None
     mlflow_experiment_name: str | None = None
+
+    # Reproducibility
+    seed: int = 0
+    raise_on_exception: bool = (True,)
 
     def __post_init__(self) -> None:
         """Validate configuration after initialization."""
@@ -232,7 +275,7 @@ def run_optimization_pipeline(config: GepaConfig) -> GepaOptimizationResult:
     This function orchestrates the complete optimization workflow:
     1. Validates the configuration
     2. Uses provided train and validation sets
-    3. Creates the agent with specified configuration
+    3. Creates the agent with specified configuration, or uses provided agent
     4. Wraps agent with SignatureAgent for structured input support
     5. Runs GEPA optimization
     6. Optionally saves results to disk
@@ -246,33 +289,6 @@ def run_optimization_pipeline(config: GepaConfig) -> GepaOptimizationResult:
     Raises:
         ValueError: If configuration is invalid.
         RuntimeError: If optimization fails.
-
-    Example:
-
-    ```python
-        >>> from gepadantic.data_utils import split_dataset
-        >>>
-        >>> # Split your dataset
-        >>> trainset, valset = split_dataset(my_dataset, train_ratio=0.7)
-        >>>
-        >>> config = GepaConfig(
-        ...     agent_model="gpt-4.1-mini",
-        ...     agent_instructions="Classify sentiment as positive, negative, or neutral",
-        ...     input_type=SentimentInput,
-        ...     output_type=SentimentOutput,
-        ...     trainset=trainset,
-        ...     valset=valset,
-        ...     metric=sentiment_metric,
-        ...     auto="light",
-        ... )
-        >>> result = run_optimization_pipeline(config)
-        >>> print(f"Best score: {result.best_score:.4f}")
-        >>> print(f"Improvement: {result.improvement_ratio():.2%}")
-        >>>
-        >>> # Apply best candidate to agent
-        >>> with result.apply_best(agent):
-        ...     output = agent.run_sync("This is great!")
-    ```
     """
 
     # Use provided trainset and valset
@@ -297,12 +313,14 @@ def run_optimization_pipeline(config: GepaConfig) -> GepaOptimizationResult:
         )
     else:
         agent = config.agent
-    # Wrap with SignatureAgent for structured input support
-    signature_agent = SignatureAgent(
-        agent,
-        input_type=config.input_type,
-        optimize_tools=config.optimize_tools,
-    )
+
+    # Wrap with SignatureAgent for structured input support (if not already wrapped)
+    if not isinstance(agent, SignatureAgent):
+        signature_agent = SignatureAgent(
+            agent,
+            input_type=config.input_type,
+            optimize_tools=config.optimize_tools,
+        )
 
     # Run optimization
     print("Starting GEPA optimization...")
@@ -335,6 +353,9 @@ def run_optimization_pipeline(config: GepaConfig) -> GepaOptimizationResult:
         use_mlflow=config.use_mlflow,
         mlflow_tracking_uri=config.mlflow_tracking_uri,
         mlflow_experiment_name=config.mlflow_experiment_name,
+        seed=config.seed,
+        raise_on_exception=config.raise_on_exception,
+        reflection_sampler=config.reflection_sampler,
     )
 
     # Save result if requested
