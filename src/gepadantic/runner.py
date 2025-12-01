@@ -8,14 +8,15 @@ from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
 import gepa.api
 from gepa.core.result import GEPAResult
-from gepa.logging.logger import LoggerProtocol
-from gepa.utils import StopperProtocol
 from gepa.gepa_utils import find_dominator_programs
+from gepa.logging.logger import LoggerProtocol, StdOutLogger
 from gepa.proposer.reflective_mutation.base import (
-    ReflectionComponentSelector,
     CandidateSelector,
+    ReflectionComponentSelector,
 )
+from gepa.utils import StopperProtocol
 from pydantic import BaseModel, ConfigDict, Field
+from pydantic_ai import usage as _usage
 
 from .adapter import PydanticAIGEPAAdapter, ReflectionSampler
 from .cache import CacheManager
@@ -25,18 +26,19 @@ from .components import (
     extract_seed_candidate_with_signature,
     normalize_component_text,
 )
+from .lm import GEPALanguageModel
 from .signature import InputSpec
 from .types import DataInst, RolloutOutput
-from .lm import GEPALanguageModel
-from pydantic_ai import usage as _usage
+
 # Type variable for the DataInst type
 DataInstT = TypeVar("DataInstT", bound=DataInst)
 
 if TYPE_CHECKING:
     from pydantic_ai.agent import AbstractAgent
+
     from .lm import GEPALanguageModel
-    
-    
+
+
 AUTO_RUN_SETTINGS = {
     "light": {"n": 6},
     "medium": {"n": 12},
@@ -44,29 +46,35 @@ AUTO_RUN_SETTINGS = {
 }
 
 
-def auto_budget(num_candidates: int, valset_size: int, minibatch_size: int = 35, full_eval_steps: int = 5) -> int:
+def auto_budget(
+    num_candidates: int,
+    valset_size: int,
+    minibatch_size: int = 35,
+    full_eval_steps: int = 5,
+) -> int:
     """Calculate the total budget for GEPA optimization based on configuration parameters.
-    
+
     This function estimates the total number of metric calls needed for a GEPA optimization
-    run based on the number of candidates, validation set size, minibatch size, and 
+    run based on the number of candidates, validation set size, minibatch size, and
     full evaluation frequency.
-    
+
     Note: Logic is based on this DSPy version: https://github.com/stanfordnlp/dspy/blob/main/dspy/teleprompt/gepa/gepa.py
-        
+
     Args:
         num_candidates: Number of candidate programs to generate.
         valset_size: Size of the validation set.
         minibatch_size: Size of minibatches for evaluation. Defaults to 35.
         full_eval_steps: Number of steps between full evaluations. Defaults to 5.
-        
+
     Returns:
         Total estimated number of metric calls needed.
-        
+
     Raises:
         ValueError: If num_trials, valset_size, or minibatch_size are negative,
                    or if full_eval_steps is less than 1.
     """
     import numpy as np
+
     num_trials = int(max(2 * (1 * 2) * np.log2(num_candidates), 1.5 * num_candidates))
     if num_trials < 0 or valset_size < 0 or minibatch_size < 0:
         raise ValueError("num_trials, valset_size, and minibatch_size must be >= 0.")
@@ -95,63 +103,61 @@ def auto_budget(num_candidates: int, valset_size: int, minibatch_size: int = 35,
 
     total += (periodic_fulls + extra_final) * V
     return total
-    
-    
+
+
 def _normalize_candidate(
     candidate: dict[str, Any] | None,
 ) -> dict[str, str]:
     if not candidate:
         return {}
-    return {
-        key: normalize_component_text(value)
-        for key, value in candidate.items()
-    }
-    
+    return {key: normalize_component_text(value) for key, value in candidate.items()}
+
 
 def dag_to_dot(
-    parent_program_for_candidate: list[list[int | None]], 
-    dominator_program_ids: set[int], 
-    best_program_idx: int, 
-    full_eval_scores: list[float]
+    parent_program_for_candidate: list[list[int | None]],
+    dominator_program_ids: set[int],
+    best_program_idx: int,
+    full_eval_scores: list[float],
 ) -> str:
     """Generate a DOT graph representation of the program evolution DAG.
-    
+
     Creates a directed acyclic graph (DAG) visualization showing the evolution
     of programs during optimization, with special highlighting for the best
     program and dominator programs.
-    
+
     Args:
         parent_program_for_candidate: List where each index represents a program
             and contains a list of parent program indices (or None for no parent).
         dominator_program_ids: Set of program indices that are dominators in the DAG.
         best_program_idx: Index of the best performing program.
         full_eval_scores: List of evaluation scores for each program.
-        
+
     Returns:
         DOT format string representing the program evolution graph.
     """
-    dot_lines = [
-        "digraph G {",
-        "    node [style=filled, shape=circle, fontsize=50];"
-    ]
+    dot_lines = ["digraph G {", "    node [style=filled, shape=circle, fontsize=50];"]
     n = len(parent_program_for_candidate)
     # Set up nodes with colors and scores in labels
     for idx in range(n):
         score = full_eval_scores[idx]
         label = f"{idx}\\n({score:.2f})"
         if idx == best_program_idx:
-            dot_lines.append(f'    {idx} [label="{label}", fillcolor=cyan, fontcolor=black];')
+            dot_lines.append(
+                f'    {idx} [label="{label}", fillcolor=cyan, fontcolor=black];'
+            )
         elif idx in dominator_program_ids:
-            dot_lines.append(f'    {idx} [label="{label}", fillcolor=orange, fontcolor=black];')
+            dot_lines.append(
+                f'    {idx} [label="{label}", fillcolor=orange, fontcolor=black];'
+            )
         else:
             dot_lines.append(f'    {idx} [label="{label}"];')
-    
+
     # Set up edges
     for child, parents in enumerate(parent_program_for_candidate):
         for parent in parents:
             if parent is not None:
-                dot_lines.append(f'    {parent} -> {child};')
-    
+                dot_lines.append(f"    {parent} -> {child};")
+
     dot_lines.append("}")
     return "\n".join(dot_lines)
 
@@ -236,8 +242,16 @@ class GepaOptimizationResult(BaseModel):
         """Return the Graphviz DOT string of the optimization DAG."""
         if self.raw_result is None:
             raise ValueError("Raw result is not available")
-        pareto_front_programs = find_dominator_programs(self.raw_result.per_val_instance_best_candidates, self.raw_result.val_aggregate_scores)
-        return dag_to_dot(self.raw_result.parents, pareto_front_programs, self.raw_result.best_idx, self.raw_result.val_aggregate_scores)
+        pareto_front_programs = find_dominator_programs(
+            self.raw_result.per_val_instance_best_candidates,
+            self.raw_result.val_aggregate_scores,
+        )
+        return dag_to_dot(
+            self.raw_result.parents,
+            pareto_front_programs,
+            self.raw_result.best_idx,
+            self.raw_result.val_aggregate_scores,
+        )
 
 
 def optimize_agent_prompts(
@@ -254,12 +268,14 @@ def optimize_agent_prompts(
     auto: Literal["light", "medium", "heavy"] | None = None,
     # Reflection-based configuration
     reflection_model: str | None = None,
-    candidate_selection_strategy: CandidateSelector | Literal['pareto', 'current_best', 'epsilon_greedy'] = "pareto",
+    candidate_selection_strategy: CandidateSelector
+    | Literal["pareto", "current_best", "epsilon_greedy"] = "pareto",
     skip_perfect_score: bool = True,
     reflection_minibatch_size: int = 3,
     perfect_score: int = 1,
     # Component selection configuration
-    module_selector: ReflectionComponentSelector | Literal["round_robin", "all"] = "all",
+    module_selector: ReflectionComponentSelector
+    | Literal["round_robin", "all"] = "all",
     # Merge-based configuration
     use_merge: bool = False,
     max_merge_invocations: int = 5,
@@ -273,9 +289,6 @@ def optimize_agent_prompts(
     # Logging
     logger: LoggerProtocol | None = None,
     run_dir: str | None = None,
-    use_wandb: bool = False,
-    wandb_api_key: str | None = None,
-    wandb_init_kwargs: dict[str, Any] | None = None,
     use_mlflow: bool = False,
     mlflow_tracking_uri: str | None = None,
     mlflow_experiment_name: str | None = None,
@@ -329,11 +342,8 @@ def optimize_agent_prompts(
         cache_verbose: Whether to log cache hits and misses.
 
         # Logging
-        logger: Logger instance for tracking progress.
+        logger: LoggerProtocol instance for tracking progress.
         run_dir: Directory to save results to.
-        use_wandb: Whether to use Weights and Biases for logging.
-        wandb_api_key: API key for Weights and Biases.
-        wandb_init_kwargs: Additional kwargs for wandb initialization.
         use_mlflow: Whether to use MLflow for logging.
         mlflow_tracking_uri: Tracking URI for MLflow.
         mlflow_experiment_name: Experiment name for MLflow.
@@ -351,8 +361,11 @@ def optimize_agent_prompts(
 
     Returns:
         GepaOptimizationResult with the best candidate and metadata.
-    """    
-    
+    """
+    # Create a default logger if none is provided
+    if logger is None:
+        logger = StdOutLogger()
+
     # Convert datasets if needed
     train_instances = list(trainset)
 
@@ -361,7 +374,9 @@ def optimize_agent_prompts(
     else:
         # If None we will use the trainset as the validation set
         val_instances = list(trainset)
-        print("No valset provided; Using trainset as valset. This is useful as an inference-time scaling strategy where you want GEPA to find the best solutions for the provided tasks in the trainset, as it makes GEPA overfit prompts to the provided trainset. In order to ensure generalization and perform well on unseen tasks, please provide separate trainset and valset. Provide the smallest valset that is just large enough to match the downstream task distribution, while keeping trainset as large as possible.")
+        logger.log(
+            "No valset provided; Using trainset as valset. This is useful as an inference-time scaling strategy where you want GEPA to find the best solutions for the provided tasks in the trainset, as it makes GEPA overfit prompts to the provided trainset. In order to ensure generalization and perform well on unseen tasks, please provide separate trainset and valset. Provide the smallest valset that is just large enough to match the downstream task distribution, while keeping trainset as large as possible."
+        )
 
     # Extract seed candidate from agent and optional signature
     extracted_seed_candidate = _normalize_candidate(
@@ -378,18 +393,22 @@ def optimize_agent_prompts(
             raise ValueError(
                 "Seed candidate keys do not match extracted seed candidate keys"
             )
-            
+
     # Set budget
     if auto is not None:
         max_metric_calls = auto_budget(
             num_candidates=AUTO_RUN_SETTINGS[auto]["n"],
             valset_size=len(valset) if valset is not None else len(trainset),
         )
-    
+
     elif max_full_evals is not None:
-        max_metric_calls = max_full_evals * (len(trainset) + (len(valset) if valset is not None else 0))
-        
-    print(f"Running GEPA for approx {max_metric_calls} metric calls of the program. This amounts to {max_metric_calls / len(trainset) if valset is None else max_metric_calls / (len(trainset) + len(valset)):.2f} full evals on the {'train' if valset is None else 'train+val'} set.")
+        max_metric_calls = max_full_evals * (
+            len(trainset) + (len(valset) if valset is not None else 0)
+        )
+
+    logger.log(
+        f"Running GEPA for approx {max_metric_calls} metric calls of the program. This amounts to {max_metric_calls / len(trainset) if valset is None else max_metric_calls / (len(trainset) + len(valset)):.2f} full evals on the {'train' if valset is None else 'train+val'} set."
+    )
 
     # Create cache manager if caching is enabled
     cache_manager = None
@@ -412,7 +431,7 @@ def optimize_agent_prompts(
     # If no reflection model is provided, use the agent's model
     if not reflection_model:
         reflection_model = agent.model.model_name
-        
+
     # Create a default language model for GEPA reflection
     reflection_lm = GEPALanguageModel(reflection_model)
 
@@ -446,9 +465,6 @@ def optimize_agent_prompts(
         # Logging
         logger=logger,
         run_dir=run_dir,
-        use_wandb=use_wandb,
-        wandb_api_key=wandb_api_key,
-        wandb_init_kwargs=wandb_init_kwargs,
         use_mlflow=use_mlflow,
         mlflow_tracking_uri=mlflow_tracking_uri,
         mlflow_experiment_name=mlflow_experiment_name,
@@ -473,18 +489,12 @@ def optimize_agent_prompts(
     original_score = None
     if raw_result.candidates and len(raw_result.candidates) > 0:
         # Check if the first candidate is the seed candidate
-        if (
-            _normalize_candidate(raw_result.candidates[0])
-            == normalized_seed_candidate
-        ):
+        if _normalize_candidate(raw_result.candidates[0]) == normalized_seed_candidate:
             original_score = raw_result.val_aggregate_scores[0]
         else:
             # Search through all candidates for the seed
             for i, candidate in enumerate(raw_result.candidates):
-                if (
-                    _normalize_candidate(candidate)
-                    == normalized_seed_candidate
-                ):
+                if _normalize_candidate(candidate) == normalized_seed_candidate:
                     original_score = raw_result.val_aggregate_scores[i]
                     break
 

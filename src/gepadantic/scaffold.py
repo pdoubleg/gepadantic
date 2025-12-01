@@ -1,28 +1,34 @@
 """Configuration-based scaffolding for GEPA optimization setup.
 
-This module provides a simplified interface for setting up GEPA prompt optimization
-through a configuration-based approach, reducing boilerplate and setup complexity.
+This module provides a simplified interface for setting up GEPA prompt optimization.
 """
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal, TypeVar
-import json
-from datetime import datetime
 
+from gepa.logging.logger import LoggerProtocol, StdOutLogger
 from gepa.proposer.reflective_mutation.base import (
-    ReflectionComponentSelector,
     CandidateSelector,
+    ReflectionComponentSelector,
 )
 from gepa.utils import StopperProtocol
 from pydantic import BaseModel
 from pydantic_ai import Agent
+from pydantic_ai.agent import AbstractAgent
 
-from .runner import GepaOptimizationResult, optimize_agent_prompts
 from .lm import get_openai_model
+from .runner import (
+    AUTO_RUN_SETTINGS,
+    GepaOptimizationResult,
+    auto_budget,
+    optimize_agent_prompts,
+)
 from .signature_agent import SignatureAgent
 from .types import DataInstWithInput, RolloutOutput
 
@@ -31,7 +37,7 @@ InputModelT = TypeVar("InputModelT", bound=BaseModel)
 OutputModelT = TypeVar("OutputModelT", bound=BaseModel)
 
 
-@dataclass
+@dataclass(kw_only=True)
 class GepaConfig:
     """Configuration for GEPA optimization setup.
 
@@ -39,6 +45,7 @@ class GepaConfig:
     providing a clean interface for users to configure their optimization runs.
 
     Args:
+        agent: The agent to optimize. Can be provided instead of agent_model and agent_instructions.
         agent_model: The model name or Model instance for the agent (e.g., "gpt-4.1-mini").
         agent_instructions: System instructions for the agent.
         input_type: Pydantic model class defining the structured input format.
@@ -68,11 +75,17 @@ class GepaConfig:
         cache_verbose: Whether to print cache statistics (default: False).
         output_dir: Directory to save optimization results (default: "optimization_results").
         save_result: Whether to automatically save results to JSON (default: True).
+        logger: LoggerProtocol instance for tracking progress (default: None).
+        use_mlflow: Whether to use MLflow for logging (default: False).
+        mlflow_tracking_uri: Tracking URI for MLflow (default: None).
+        mlflow_experiment_name: Experiment name for MLflow (default: None).
 
     Example:
+
+    ```python
         >>> from pydantic import BaseModel, Field
-        >>> from src.gepa.scaffold import GepaConfig, run_optimization_pipeline
-        >>> from src.gepa.data_utils import dataframe_to_dataset, split_dataset
+        >>> from gepadantic.scaffold import GepaConfig, run_optimization_pipeline
+        >>> from gepadantic.data_utils import split_dataset
         >>>
         >>> class MyInput(BaseModel):
         ...     text: str = Field(description="Input text")
@@ -99,19 +112,23 @@ class GepaConfig:
         ...     auto="light",
         ... )
         >>> result = run_optimization_pipeline(config)
+    ```
     """
 
-    # Core agent configuration
-    agent_model: str
-    agent_instructions: str
+    # Required configuration
     input_type: type[BaseModel]
     output_type: type[BaseModel]
-
-    # Dataset and evaluation
     trainset: Sequence[DataInstWithInput[Any]]
     metric: Callable[
         [DataInstWithInput[Any], RolloutOutput[Any]], tuple[float, str | None]
     ]
+
+    # Core agent configuration
+    agent: AbstractAgent[Any, Any] | None = None
+    agent_model: str | None = None
+    agent_instructions: str | None = None
+
+    # Dataset and evaluation
     valset: Sequence[DataInstWithInput[Any]] | None = None
 
     # Budget configuration (exactly one must be set)
@@ -128,6 +145,7 @@ class GepaConfig:
     reflection_minibatch_size: int = 3
     perfect_score: int = 1
     skip_perfect_score: bool = True
+
     # Component selection options
     module_selector: ReflectionComponentSelector | Literal["round_robin", "all"] = "all"
     candidate_selection_strategy: (
@@ -151,9 +169,15 @@ class GepaConfig:
     cache_dir: str = ".gepa_cache"
     cache_verbose: bool = False
 
-    # Output options
+    # Output/logging options
     output_dir: str | Path = "optimization_results"
     save_result: bool = True
+    logger: LoggerProtocol | None = None
+
+    # MLFlow options
+    use_mlflow: bool = False
+    mlflow_tracking_uri: str | None = None
+    mlflow_experiment_name: str | None = None
 
     def __post_init__(self) -> None:
         """Validate configuration after initialization."""
@@ -169,6 +193,37 @@ class GepaConfig:
             f"max_full_evals={self.max_full_evals}, "
             f"auto={self.auto}."
         )
+        # Validate that exactly one of agent or agent_model is set
+        assert (self.agent is not None) + (self.agent_model is not None) == 1, (
+            "Exactly one of agent or agent_model must be set. "
+            f"You set agent={self.agent}, "
+            f"agent_model={self.agent_model}."
+        )
+        if self.logger is None:
+            self.logger = StdOutLogger()
+
+    @property
+    def estimated_metric_calls(self) -> int:
+        if self.max_metric_calls is not None:
+            metric_calls = self.max_metric_calls
+        elif self.auto is not None:
+            metric_calls = auto_budget(
+                num_candidates=AUTO_RUN_SETTINGS[self.auto]["n"],
+                valset_size=len(self.valset)
+                if self.valset is not None
+                else len(self.trainset),
+            )
+        elif self.max_full_evals is not None:
+            metric_calls = self.max_full_evals * (
+                len(self.trainset)
+                + (len(self.valset) if self.valset is not None else 0)
+            )
+        else:
+            raise ValueError("No budget set")
+        self.logger.log(
+            f"GEPA needs approx {metric_calls} metric calls of the program. This amounts to {metric_calls / len(self.trainset) if self.valset is None else metric_calls / (len(self.trainset) + len(self.valset)):.2f} full evals on the {'train' if self.valset is None else 'train+val'} set."
+        )
+        return metric_calls
 
 
 def run_optimization_pipeline(config: GepaConfig) -> GepaOptimizationResult:
@@ -193,7 +248,9 @@ def run_optimization_pipeline(config: GepaConfig) -> GepaOptimizationResult:
         RuntimeError: If optimization fails.
 
     Example:
-        >>> from src.gepa.data_utils import split_dataset
+
+    ```python
+        >>> from gepadantic.data_utils import split_dataset
         >>>
         >>> # Split your dataset
         >>> trainset, valset = split_dataset(my_dataset, train_ratio=0.7)
@@ -215,6 +272,7 @@ def run_optimization_pipeline(config: GepaConfig) -> GepaOptimizationResult:
         >>> # Apply best candidate to agent
         >>> with result.apply_best(agent):
         ...     output = agent.run_sync("This is great!")
+    ```
     """
 
     # Use provided trainset and valset
@@ -230,13 +288,15 @@ def run_optimization_pipeline(config: GepaConfig) -> GepaOptimizationResult:
         )
 
     # Create the base agent
-    model = get_openai_model(config.agent_model)
-    agent = Agent(
-        model=model,
-        instructions=config.agent_instructions,
-        output_type=config.output_type,
-    )
-
+    if config.agent is None:
+        model = get_openai_model(config.agent_model)
+        agent = Agent(
+            model=model,
+            instructions=config.agent_instructions,
+            output_type=config.output_type,
+        )
+    else:
+        agent = config.agent
     # Wrap with SignatureAgent for structured input support
     signature_agent = SignatureAgent(
         agent,
@@ -271,6 +331,10 @@ def run_optimization_pipeline(config: GepaConfig) -> GepaOptimizationResult:
         enable_cache=config.enable_cache,
         cache_dir=config.cache_dir,
         cache_verbose=config.cache_verbose,
+        logger=config.logger,
+        use_mlflow=config.use_mlflow,
+        mlflow_tracking_uri=config.mlflow_tracking_uri,
+        mlflow_experiment_name=config.mlflow_experiment_name,
     )
 
     # Save result if requested

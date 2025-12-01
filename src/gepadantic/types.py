@@ -63,51 +63,17 @@ class DataInstWithInput(Generic[InputModelT]):
         self,
         *,
         input: InputModelT | None = None,
-        signature: InputModelT | None = None,
         message_history: list[ModelMessage] | None,
         metadata: dict[str, Any],
         case_id: str,
     ) -> None:
-        if input is None and signature is None:
-            raise TypeError("Either 'input' or legacy 'signature' must be provided.")
-        if input is not None and signature is not None and input != signature:
-            raise ValueError(
-                "Received both 'input' and legacy 'signature' with different values."
-            )
+        if input is None:
+            raise TypeError("'input' must be provided.")
 
-        resolved = input if input is not None else signature
-        assert resolved is not None
-
-        if signature is not None and input is None:
-            warnings.warn(
-                "Passing 'signature=' to DataInstWithInput is deprecated; use 'input=' instead.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-
-        self.input = resolved
+        self.input = input
         self.message_history = message_history
         self.metadata = metadata
         self.case_id = case_id
-
-    @property
-    def signature(self) -> InputModelT:
-        """Legacy accessor kept for backward compatibility."""
-        warnings.warn(
-            "DataInstWithInput.signature is deprecated; use .input instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self.input
-
-    @signature.setter
-    def signature(self, value: InputModelT) -> None:
-        warnings.warn(
-            "Setting DataInstWithInput.signature is deprecated; assign to .input instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        self.input = value
 
 
 DataInst = DataInstWithPrompt | DataInstWithInput[Any]

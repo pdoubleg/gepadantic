@@ -1,0 +1,53 @@
+{
+  "best_candidate": {
+    "instructions": "Predict whether a Titanic passenger survived based on these input features: passenger class (1=First, 2=Second, 3=Third), sex (male, female), age (in years), number of siblings/spouses aboard, number of parents/children aboard, fare paid (in British pounds), and port of embarkation (C=Cherbourg, Q=Queenstown, S=Southampton, Unknown=Not stated). Use historical data patterns: 1) Female passengers had a much higher survival rate than males, especially in higher (1st and 2nd) classes. 2) Passengers in first class survived more frequently than those in 2nd or 3rd class. 3) Young children also had higher survival rates. 4) Embarkation point and fare have modest influence, but Southampton (S) tends to lower odds compared to Cherbourg (C) in some cases. Base your prediction and reasoning on these historical survival trends and the combination of all the provided features. If uncertain, give your best estimate and explain the major factors.",
+    "tool:final_result:description": "Respond with the survival prediction for the Titanic passenger, a confidence score (0 to 1), and detailed reasoning that references the specific features and known Titanic survival trends (e.g., impact of class, gender, age, fare, family aboard, embarkation port).",
+    "tool:final_result:param:survived": "Predicted outcome: 'yes' if the passenger would likely have survived, 'no' if not. Use known Titanic survival data and historical trends in your assessment.",
+    "tool:final_result:param:confidence": "A confidence score between 0 (very low) and 1 (very high), reflecting how certain you are in your prediction based on the input features and Titanic data patterns.",
+    "tool:final_result:param:reasoning": "Give a clear explanation for your prediction, explicitly referencing the factors (class, gender, age, fare, family, embarkation port) and how each influences survival according to Titanic historical data. Explain why you weighted those features as you did.",
+    "signature:PassengerInput:instructions": "Provide all passenger features for Titanic survival prediction. Use the latest available value for each feature. Interpret \"Unknown\" embarkation as missing or not stated.",
+    "signature:PassengerInput:passenger_class:desc": "Passenger class (1 = First: highest survival; 2 = Second: intermediate; 3 = Third: lowest survival rates historically)",
+    "signature:PassengerInput:sex:desc": "Passenger's sex (Female survival rate was much higher, especially in first and second class. Males had a lower survival rate)",
+    "signature:PassengerInput:age:desc": "Passenger's age in years (Young children sometimes prioritized for lifeboats; adults' survival depended more on class and sex)",
+    "signature:PassengerInput:siblings_spouses:desc": "Number of siblings and/or spouses aboard (Can influence survival\u2014family groups may try to stay together)",
+    "signature:PassengerInput:parents_children:desc": "Number of parents and/or children aboard (Children with mothers, especially in higher class, often prioritized)",
+    "signature:PassengerInput:fare:desc": "Fare paid for passage (in British pounds; higher fares often corresponded with higher classes, which had better survival odds)",
+    "signature:PassengerInput:embarked:desc": "Port of embarkation (C = Cherbourg, highest survival rates; Q = Queenstown; S = Southampton, lower survival historically; Unknown = not stated)"
+  },
+  "best_score": 0.585,
+  "original_candidate": {
+    "instructions": "Predict the survival of the Titanic passenger based on the given features.",
+    "tool:final_result:description": "Output prediction for Titanic survival.",
+    "tool:final_result:param:survived": "Whether the passenger survived",
+    "tool:final_result:param:confidence": "Confidence score between 0 and 1",
+    "tool:final_result:param:reasoning": "Detailed explanation of the prediction based on the features",
+    "signature:PassengerInput:instructions": "Input features for Titanic survival prediction.",
+    "signature:PassengerInput:passenger_class:desc": "Passenger class (1=First, 2=Second, 3=Third)",
+    "signature:PassengerInput:sex:desc": "Passenger's sex",
+    "signature:PassengerInput:age:desc": "Passenger's age in years",
+    "signature:PassengerInput:siblings_spouses:desc": "Number of siblings/spouses aboard",
+    "signature:PassengerInput:parents_children:desc": "Number of parents/children aboard",
+    "signature:PassengerInput:fare:desc": "Passenger fare paid in pounds",
+    "signature:PassengerInput:embarked:desc": "Port of embarkation (C=Cherbourg, Q=Queenstown, S=Southampton)"
+  },
+  "original_score": 0.4119999999999999,
+  "num_iterations": 3,
+  "num_metric_calls": 93,
+  "gepa_usage": {
+    "input_tokens": 811243,
+    "cache_write_tokens": 0,
+    "cache_read_tokens": 2816,
+    "output_tokens": 22509,
+    "input_audio_tokens": 0,
+    "cache_audio_read_tokens": 0,
+    "output_audio_tokens": 0,
+    "details": {
+      "accepted_prediction_tokens": 0,
+      "audio_tokens": 0,
+      "reasoning_tokens": 0,
+      "rejected_prediction_tokens": 0
+    },
+    "requests": 72,
+    "tool_calls": 0
+  }
+}

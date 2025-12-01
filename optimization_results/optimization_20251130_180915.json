@@ -1,0 +1,39 @@
+{
+  "best_candidate": {
+    "instructions": "Solve math problems by calling the `run_python` sandbox tool. Write complete Python scripts with all necessary imports and print the final result. You may only use the Python standard library; third-party packages are unavailable.",
+    "tool:run_python:description": "Execute Python code inside an isolated sandbox using only the Python standard library. Provide fully self-contained scripts that print their final answer.",
+    "tool:run_python:param:code": "Complete Python script to run. Include all required imports and print the final answer.",
+    "tool:run_python:param:globals": "Optional JSON-compatible mapping that will be injected as global variables when the script starts.",
+    "signature:MathProblemInput:instructions": "Input model for math problems requiring exact numeric answers.\n\n    Attributes:\n        problem: A math problem that needs an exact numeric answer.\n    ",
+    "signature:MathProblemInput:problem:desc": "A math problem that needs an exact numeric answer."
+  },
+  "best_score": 0.375,
+  "original_candidate": {
+    "instructions": "Solve math problems by calling the `run_python` sandbox tool. Write complete Python scripts with all necessary imports and print the final result. You may only use the Python standard library; third-party packages are unavailable.",
+    "tool:run_python:description": "Execute Python code inside an isolated sandbox using only the Python standard library. Provide fully self-contained scripts that print their final answer.",
+    "tool:run_python:param:code": "Complete Python script to run. Include all required imports and print the final answer.",
+    "tool:run_python:param:globals": "Optional JSON-compatible mapping that will be injected as global variables when the script starts.",
+    "signature:MathProblemInput:instructions": "Input model for math problems requiring exact numeric answers.\n\n    Attributes:\n        problem: A math problem that needs an exact numeric answer.\n    ",
+    "signature:MathProblemInput:problem:desc": "A math problem that needs an exact numeric answer."
+  },
+  "original_score": 0.375,
+  "num_iterations": 4,
+  "num_metric_calls": 68,
+  "gepa_usage": {
+    "input_tokens": 251586,
+    "cache_write_tokens": 0,
+    "cache_read_tokens": 9216,
+    "output_tokens": 14687,
+    "input_audio_tokens": 0,
+    "cache_audio_read_tokens": 0,
+    "output_audio_tokens": 0,
+    "details": {
+      "accepted_prediction_tokens": 0,
+      "audio_tokens": 0,
+      "reasoning_tokens": 0,
+      "rejected_prediction_tokens": 0
+    },
+    "requests": 127,
+    "tool_calls": 61
+  }
+}

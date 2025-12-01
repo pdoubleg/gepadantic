@@ -13,6 +13,7 @@ dependencies = [
     "seaborn>=0.13.2",
     "requests>=2.32.5",
     "tqdm>=4.67.1",
+    "mcp-run-python>=0.0.21",
 ]
 
 [build-system]
@@ -23,7 +24,14 @@ build-backend = "hatchling.build"
 dev = [
     "ipykernel>=7.1.0",
     "pytest>=9.0.1",
+    "time-machine>=2.19.0",
+    "inline-snapshot>=0.29.0",
+    "pytest-asyncio>=1.2.0",
 ]
 lint = [
     "ruff>=0.14.6",
 ]
+
+[tool.inline-snapshot]
+# Inline-snapshot expects a format string; provide ruff invocation with filename placeholder.
+format-command = "ruff format --stdin-filename {filename} -"

@@ -1,0 +1,47 @@
+{
+  "best_candidate": {
+    "instructions": "Solve math problems by writing and executing complete Python scripts using only the Python standard library. Always include all required imports and use print to display the final answer. If a shortcut or algebraic simplification can be applied (e.g., simplifying factorial terms), explain or use it. Ensure the answer is exact and shows the correct final value. Do not use any third-party packages. If the answer is an integer, express it as such (not as a float), unless otherwise specified. For exponentiation (e.g., powers of -1), recall that even powers of -1 are 1, odd powers are -1. Follow the sample patterns below as templates for similar problems.\n\nExamples:\n# Average of consecutive integers\ndef compute_average():\n    numbers = list(range(12, 7, -1))  # inclusive of 8\n    return sum(numbers) / len(numbers)\nprint(compute_average())\n# Factorial division shortcut\nprint(100)  # Explanation: 100! / 99! = 100\n# Power sum\nprint((-1)**50 + (-1)**51 + (-1)**52)  # Explanation: even power = 1, odd = -1, sum the terms.",
+    "tool:final_result:description": "Return the exact numeric answer along with the code that produced it and a brief explanation.\n\nAttributes:\n    explanation: Briefly (max 2 sentences) summarize the approach and any mathematical or coding shortcut used.\n    expression: The complete Python script (multi-line if needed, with imports) that computes the result and prints it.\n    answer: The precise numeric answer (integer if possible unless the context requires a float or decimal).",
+    "tool:final_result:param:explanation": "Provide a concise (up to 2 sentences) summary of how the problem is solved, mentioning any simplifications or special mathematical logic, such as properties of exponents or factorials.",
+    "tool:final_result:param:expression": "Give the full Python script (with all required imports and print statement) that solves the problem. Whenever possible, use mathematical shortcuts, such as simplifying factorial divisions or reasoning about exponents, to minimize unnecessary computation.",
+    "tool:final_result:param:answer": "Provide the exact numeric answer, as an integer when appropriate (not as a float unless necessary). Do not round unless specified.",
+    "tool:run_python:description": "Execute a fully self-contained Python script using only the Python standard library. All required imports must be included at the top; print the final exact answer (integer or float as appropriate). For well-known simplifications (e.g., factorial fractions; exponents of -1), implement them directly.",
+    "tool:run_python:param:code": "A complete, stand-alone Python script (with all necessary imports) that prints the exact answer to the math problem. Apply algebraic or arithmetic simplifications where possible (for example, simplify factorial ratios or use properties of powers).",
+    "tool:run_python:param:globals": "(Optional) JSON-compatible mapping for any global variables to be injected when starting the script. In most cases, this can be left empty as all code should be self-contained.",
+    "signature:MathProblemInput:instructions": "Input specification for math problems that require exact numeric answers. The input is a string describing a math problem, which may require integer, rational, or exact decimal answers and could include factorials, exponentiation, or range sums. Clarify if exact form or integer/float output is desired.",
+    "signature:MathProblemInput:problem:desc": "A math problem requiring an exact numeric answer. It may involve factorials (noted as n!), exponents, integer sequences, or sums. State if the answer should be exactly integer, rational, or decimal; mention any special forms expected (e.g. simplified fraction, symbolic where relevant)."
+  },
+  "best_score": 0.8333333333333334,
+  "original_candidate": {
+    "instructions": "Solve math problems by calling the `run_python` sandbox tool. Write complete Python scripts with all necessary imports and print the final result. You may only use the Python standard library; third-party packages are unavailable.",
+    "tool:final_result:description": "The solved value and the code that produced it.\n\nAttributes:\n    explanation: Two sentences max summarizing how the code solves the problem.\n    expression: The complete Python script used to compute the answer.\n    answer: Numeric answer rounded only if necessary.",
+    "tool:final_result:param:explanation": "Two sentences max summarizing how the code solves the problem.",
+    "tool:final_result:param:expression": "The complete Python script used to compute the answer (can be multi-line with imports).",
+    "tool:final_result:param:answer": "Numeric answer rounded only if necessary.",
+    "tool:run_python:description": "Execute Python code inside an isolated sandbox using only the Python standard library. Provide fully self-contained scripts that print their final answer.",
+    "tool:run_python:param:code": "Complete Python script to run. Include all required imports and print the final answer.",
+    "tool:run_python:param:globals": "Optional JSON-compatible mapping that will be injected as global variables when the script starts.",
+    "signature:MathProblemInput:instructions": "Input model for math problems requiring exact numeric answers.\n    \n    Attributes:\n        problem: A math problem that needs an exact numeric answer.\n    ",
+    "signature:MathProblemInput:problem:desc": "A math problem that needs an exact numeric answer."
+  },
+  "original_score": 0.75,
+  "num_iterations": 4,
+  "num_metric_calls": 96,
+  "gepa_usage": {
+    "input_tokens": 600590,
+    "cache_write_tokens": 0,
+    "cache_read_tokens": 0,
+    "output_tokens": 26113,
+    "input_audio_tokens": 0,
+    "cache_audio_read_tokens": 0,
+    "output_audio_tokens": 0,
+    "details": {
+      "accepted_prediction_tokens": 0,
+      "audio_tokens": 0,
+      "reasoning_tokens": 0,
+      "rejected_prediction_tokens": 0
+    },
+    "requests": 222,
+    "tool_calls": 128
+  }
+}
