@@ -75,15 +75,26 @@ GEPA can optimize different parts of your agent:
 All these text components evolve together using LLM-guided improvements:
 
 ```python
-from gepadantic import run_optimization_pipeline
+from gepadantic import GepaConfig, run_optimization_pipeline
+
+# Define evaluation metric
+def metric(input_data, output) -> float:
+    # Return 0.0-1.0 score + feedback string
+    return score, feedback
+
+config = GepaConfig(
+    agent=agent,
+    input_type=AnalysisInput,
+    output_type=AnalysisOutput,
+    trainset=trainset,
+    valset=valset,
+    metric=metric,
+    max_full_evals=10,
+    optimize_tools=True,
+)
 
 # Optimize agent with SignatureAgent
-result = await run_optimization_pipeline(
-    agent=agent,  # SignatureAgent instance
-    trainset=examples,
-    metric=metric,
-    optimize_tools=True, # Optimize output model & tool(s) if applicable
-)
+result = run_optimization_pipeline(config)
 
 # Access all optimized components
 print(result.best_candidate.components)
