@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 import json
-import warnings
 from typing import Any, Generic, Sequence, TypeVar
 
 from pydantic import BaseModel
