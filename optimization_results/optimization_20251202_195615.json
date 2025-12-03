@@ -1,0 +1,53 @@
+{
+  "best_candidate": {
+    "instructions": "Predict the survival of a single Titanic passenger using their complete feature set, referencing actual 1912 Titanic survival statistics. Required fields: travel class (1/2/3), sex (male/female), age (years), siblings/spouses, parents/children, fare (GBP), and embarkation port (C/Q/S). The prediction should critically consider the combined effect of class, sex, and age, using historically documented survival rates (e.g., ~97% survival for 1st class women, 20-30% for 2nd class men, <20% for 3rd class men, >60% for children under 15). Explain your logic by referencing these statistical patterns and discussing edge cases or ambiguous feature combinations (e.g., a 3rd class male with a high fare). Use all inputs; missing data undermines accuracy. Output: (1) survival (yes/no), (2) confidence (0\u20131), (3) thorough step-by-step reasoning referencing the relevant data for the passenger\u2019s feature intersection, explaining how you resolved any ambiguity.",
+    "tool:final_result:description": "Given the complete feature set for a Titanic passenger\u2014class (1/2/3), sex (male/female), age (years), siblings/spouses, parents/children, fare (GBP), and embarked port (C/Q/S)\u2014predict outcome with these outputs: (1) survival (yes/no), (2) confidence score (0\u20131, matching Titanic base rates for the closest feature intersection), and (3) detailed, step-wise, data-driven reasoning. For each input, cite actual Titanic survival statistics relevant to the exact group (e.g., 1st class woman, 2nd class adult male, 3rd class child) and discuss how the feature intersections influence the outcome. If features conflict (such as high-fare in 3rd class or lone children from low-survival classes), highlight the ambiguity, explain its impact on confidence, and say how you resolve it. Always ground the prediction in documented data (e.g., ~97% for 1st class women, <20% for 3rd class men).",
+    "tool:final_result:param:survived": "Output 'yes' if the feature intersection matches a historically high-survival group (e.g., all 1st class women), and 'no' for low-survival intersections (e.g., 3rd class adult males). For edge or ambiguous cases, reference the actual Titanic group survival rate and explain the basis for your conclusion, weighting strong predictors (class, sex, age) most heavily. In cases where documented rates are near 50% or features conflict, transparently note the uncertainty and reasoning behind the final choice.",
+    "tool:final_result:param:confidence": "Estimate a probability between 0 and 1 reflecting empirical Titanic survival rates for the closest possible feature intersection. Use historic benchmarks: ~97% for 1st class females, ~62% average for 1st class, ~20-30% for 2nd class men, <20% for 3rd class men, >60% for children under 15 (especially girls in upper classes). If features conflict (such as a high-fare 3rd class male or lone 3rd class child), justify the confidence discount or boost, indicating exactly which data shifts the score up or down. Clearly state the base rate you chose and the rationale for any adjustment.",
+    "tool:final_result:param:reasoning": "Provide a numbered step-by-step, data-based analysis:\n1. Sex: Start by stating the historical odds (e.g., 'Women, especially in 1st class, had ~97% survival').\n2. Age: Note if the passenger is a child (<15: often >60% survival) and how that interacts with sex/class.\n3. Class: Provide survival rates for the class (1st: ~62%, 2nd: ~43%, 3rd: ~25%; with breakdown for men/women/children).\n4. Fare: Interpret as a proxy for class\u2014flag unusually high fares in low classes.\n5. Family: Mention small/lone children prioritized for rescue, larger families may face complications.\n6. Embarked Port: Use only to clarify noble/ambiguous cases\u2014e.g., Cherbourg favoring 1st class, Queenstown 3rd class.\nIf features conflict (e.g., a 3rd class lone child, or high-fare 3rd class), call this out, show how it creates ambiguity or raises/lower confidence, and clearly conclude how the intersection leads to your final answer. Always quote the pertinent Titanic survival rate for this specific combination.",
+    "signature:PassengerInput:instructions": "Input the full details for a single Titanic passenger. Required fields: class (1=First, 2=Second, 3=Third), biological sex (male/female), age (years), number of siblings/spouses, number of parents/children, fare paid (GBP), port of embarkation (C= Cherbourg, Q= Queenstown, S= Southampton). Accuracy demands every field is present and correct; the model will reference actual 1912 Titanic survival statistics corresponding to the completed feature intersection.",
+    "signature:PassengerInput:passenger_class:desc": "Travel class (1=First, 2=Second, 3=Third):\n- 1st class: Highest survival (~62% overall; ~97% for women; even higher for 1st class children)\n- 2nd class: Moderate survival (~43% overall; women/children much higher than men)\n- 3rd class: Lowest survival (men <20%; children and women sometimes higher, but much lower than in upper classes)\nLifeboat location, social status, and evacuation priorities gave large advantage to upper classes, especially for women and children.",
+    "signature:PassengerInput:sex:desc": "Biological sex (male/female). Sex was a primary determinant of survival. Women (especially in 1st/2nd class) had very high survival rates (up to 97% for 1st class women). Men, especially in 3rd class, had very low survival (<20%). Combine this feature with class and age for nuanced, historically accurate predictions.",
+    "signature:PassengerInput:age:desc": "Age in years. Children under 15 had much higher survival rates (frequently >60%; highest for girls in upper classes), adults and elderly males were much less likely to survive, especially in lower classes. Always use in combination: for example, a 1st class girl under 15 had almost certain survival, while an elderly 3rd class man had near-zero odds.",
+    "signature:PassengerInput:siblings_spouses:desc": "Number of siblings/spouses traveling. Small family groups or lone children (especially girls) sometimes prioritized in evacuation. Large groups could face logistical problems. This feature is less predictive than class/sex/age but can be decisive in ambiguous situations (e.g., a lone 3rd class child had better odds than one in a large family).",
+    "signature:PassengerInput:parents_children:desc": "Number of parents/children onboard. Again, lone children (especially girls) may have been prioritized for rescue. Very large families often suffered lower survival odds due to evacuation complexity. Best used for boosting or discounting confidence in otherwise ambiguous cases.",
+    "signature:PassengerInput:fare:desc": "Fare paid (GBP). Strong proxy for class: high fares overwhelmingly 1st class, low fares typically 3rd class. Exception: a very high 3rd class fare (rare) may indicate special status or cabin and slightly improve survival odds compared to typical 3rd class. Always interpret in context with class and port.",
+    "signature:PassengerInput:embarked:desc": "Embarked port: C (Cherbourg), Q (Queenstown), S (Southampton). Cherbourg: mainly upper class, higher survival overall. Queenstown: majority 3rd class, lower survival. Southampton: largest group, mixed classes. Use to help disambiguate class or nationality where other features are unclear."
+  },
+  "best_score": 0.5967,
+  "original_candidate": {
+    "instructions": "Predict the survival of the Titanic passenger based on the given features.",
+    "tool:final_result:description": "Output prediction for Titanic survival.",
+    "tool:final_result:param:survived": "Whether the passenger survived",
+    "tool:final_result:param:confidence": "Confidence score between 0 and 1",
+    "tool:final_result:param:reasoning": "Detailed explanation of the prediction based on the features",
+    "signature:PassengerInput:instructions": "Input features for Titanic survival prediction.",
+    "signature:PassengerInput:passenger_class:desc": "Passenger class (1=First, 2=Second, 3=Third)",
+    "signature:PassengerInput:sex:desc": "Passenger's sex",
+    "signature:PassengerInput:age:desc": "Passenger's age in years",
+    "signature:PassengerInput:siblings_spouses:desc": "Number of siblings/spouses aboard",
+    "signature:PassengerInput:parents_children:desc": "Number of parents/children aboard",
+    "signature:PassengerInput:fare:desc": "Passenger fare paid in pounds",
+    "signature:PassengerInput:embarked:desc": "Port of embarkation (C=Cherbourg, Q=Queenstown, S=Southampton)"
+  },
+  "original_score": 0.5895,
+  "num_iterations": 6,
+  "num_metric_calls": 114,
+  "gepa_usage": {
+    "input_tokens": 720816,
+    "cache_write_tokens": 0,
+    "cache_read_tokens": 0,
+    "output_tokens": 29765,
+    "input_audio_tokens": 0,
+    "cache_audio_read_tokens": 0,
+    "output_audio_tokens": 0,
+    "details": {
+      "accepted_prediction_tokens": 0,
+      "audio_tokens": 0,
+      "reasoning_tokens": 0,
+      "rejected_prediction_tokens": 0
+    },
+    "requests": 115,
+    "tool_calls": 0
+  }
+}
