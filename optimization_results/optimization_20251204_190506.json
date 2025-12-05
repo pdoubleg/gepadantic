@@ -1,0 +1,41 @@
+{
+  "best_candidate": {
+    "instructions": "Read the following facility support request email and analyze it to determine three key pieces of information: (1) the urgency level (high/medium/low), (2) the sentiment of the sender (positive/neutral/negative), and (3) which issue categories the email pertains to (choose all that apply from the provided category set). When analyzing each aspect:\n\n\u2022 Urgency: Identify explicit expressions (e.g., 'urgent,' 'as soon as possible') and implicit cues (e.g., mention of health, safety, or service disruption indicates high; ongoing inconvenience indicates medium; informational or non-essential inquiries are low).\n\u2022 Sentiment: Sentiment is positive if the sender shows appreciation, thanks, or trust; negative if dissatisfied, concerned, disappointed, or making a complaint; neutral if strictly factual, brief, or just reporting. Look for gratitude and partnership language even in problem reports.\n\u2022 Categories: Assign every relevant category, including those implied or overlapping. For instance, an inquiry about sustainability is both 'sustainability_and_environmental_practices' AND 'general_inquiries.' Facility complaints about environmental issues are both 'sustainability_and_environmental_practices' AND 'customer_feedback_and_complaints.'\n\nAvailable categories:\n- specialized_cleaning_services\n- quality_and_safety_concerns\n- facility_management_issues\n- routine_maintenance_requests\n- general_inquiries\n- sustainability_and_environmental_practices\n- customer_feedback_and_complaints\n\nReturn your classification as: {\"urgency\": ..., \"sentiment\": ..., \"categories\": [...]}.\n\nExamples:\n1. \"We appreciate your help but our OR scheduling is causing delays.\" => urgency: medium, sentiment: positive, categories: [facility_management_issues]\n2. \"I\u2019m interested in your green cleaning practices.\" => urgency: low, sentiment: positive, categories: [sustainability_and_environmental_practices, general_inquiries]\n3. \"My air conditioning is not working and it\u2019s uncomfortable.\" => urgency: medium, sentiment: neutral, categories: [routine_maintenance_requests]\n\nBe comprehensive\u2014prefer more categories over too few.",
+    "tool:final_result:description": "Analyzes facility support request emails to assign correct urgency, sentiment, and all relevant domain categories based on facility management standards. Considers explicit and implicit context, such as health or safety risks, complaints, gratitude, or general inquiries. Assigns all overlapping or implied categories and recognizes multi-category relevance (e.g., inquiries can be both 'sustainability_and_environmental_practices' and 'general_inquiries').",
+    "tool:final_result:param:urgency": "Classify urgency as 'high', 'medium', or 'low' based on the speed of response required:\n- 'High' for issues affecting health, safety, or core operations, or where urgency/critical words are used.\n- 'Medium' for ongoing or escalating discomfort or inconvenience, non-critical but time-sensitive needs.\n- 'Low' for non-urgent requests, general questions, or informational inquiries.",
+    "tool:final_result:param:sentiment": "Assign as 'positive', 'neutral', or 'negative':\n- 'Positive' includes explicit appreciation, thanks, praise, or optimism\u2014even in problem statements if partnership or gratitude is expressed.\n- 'Negative' is for dissatisfaction, complaint, concern, disappointment, or frustration.\n- 'Neutral' reflects a strictly factual report or impersonal, businesslike tone without overt emotion.",
+    "tool:final_result:param:categories": "Assign ALL relevant categories from:\n- specialized_cleaning_services\n- quality_and_safety_concerns\n- facility_management_issues\n- routine_maintenance_requests\n- general_inquiries\n- sustainability_and_environmental_practices\n- customer_feedback_and_complaints\nAlways include implied or overlapping categories. For example: a question about green operations is BOTH 'sustainability_and_environmental_practices' AND 'general_inquiries'. Prefer assigning an extra relevant category rather than omitting one.",
+    "signature:EmailInput:instructions": "Input model for facility support email triage: For each received email, analyze and assign (1) urgency (high/medium/low), (2) sender sentiment (positive/neutral/negative), and (3) all relevant facility domain categories (multiple if necessary, including implied or overlapping ones) from the standard category set.",
+    "signature:EmailInput:input:desc": "The complete text of the facility support request email to be analyzed for urgency, sender sentiment, and comprehensive domain category assignment, accounting for both explicit mention and implied relevance."
+  },
+  "best_score": 0.8222222222222223,
+  "original_candidate": {
+    "instructions": "\nRead the following facility support request and analyze it to determine the urgency, sentiment, and categories.\n",
+    "tool:final_result:description": "Analyzes facility support requests.",
+    "tool:final_result:param:urgency": "The urgency of the request",
+    "tool:final_result:param:sentiment": "The sentiment of the request",
+    "tool:final_result:param:categories": "The categories of the request",
+    "signature:EmailInput:instructions": "Input model for email classification.",
+    "signature:EmailInput:input:desc": "The email content to classify"
+  },
+  "original_score": 0.8185185185185184,
+  "num_iterations": 4,
+  "num_metric_calls": 60,
+  "gepa_usage": {
+    "input_tokens": 177117,
+    "cache_write_tokens": 0,
+    "cache_read_tokens": 0,
+    "output_tokens": 7236,
+    "input_audio_tokens": 0,
+    "cache_audio_read_tokens": 0,
+    "output_audio_tokens": 0,
+    "details": {
+      "accepted_prediction_tokens": 0,
+      "audio_tokens": 0,
+      "reasoning_tokens": 0,
+      "rejected_prediction_tokens": 0
+    },
+    "requests": 60,
+    "tool_calls": 0
+  }
+}

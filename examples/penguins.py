@@ -1,7 +1,7 @@
-"""Complete example demonstrating GEPA scaffolding with the Titanic dataset.
+"""Complete example demonstrating GEPA scaffolding with the Palmer Penguins dataset.
 
-This example shows how to use the scaffolding system to optimize a survival
-prediction task using the classic Titanic dataset with subset of passenger features.
+This example shows how to use the scaffolding system to optimize a species
+classification task using the Palmer Penguins dataset with penguin measurements.
 
 The example includes metrics:
 - Accuracy
@@ -32,26 +32,33 @@ from src.gepadantic.signature_agent import SignatureAgent
 
 
 # Step 1: Define input and output models
-class PassengerInput(BaseModel):
-    """Input features for Titanic survival prediction."""
+class PenguinInput(BaseModel):
+    """Input features for Palmer Penguins species classification."""
 
-    passenger_class: Literal[1, 2, 3] = Field(
-        description="Passenger class (1=First, 2=Second, 3=Third)"
+    bill_length_mm: float = Field(
+        description="Length of the penguin's bill (culmen) in millimeters"
     )
-    sex: Literal["male", "female"] = Field(description="Passenger's sex")
-    age: float = Field(description="Passenger's age in years")
-    siblings_spouses: int = Field(description="Number of siblings/spouses aboard")
-    parents_children: int = Field(description="Number of parents/children aboard")
-    fare: float = Field(description="Passenger fare paid in pounds")
-    embarked: Literal["C", "Q", "S", "Unknown"] = Field(
-        description="Port of embarkation (C=Cherbourg, Q=Queenstown, S=Southampton)"
+    bill_depth_mm: float = Field(
+        description="Depth of the penguin's bill (culmen) in millimeters"
+    )
+    flipper_length_mm: float = Field(
+        description="Length of the penguin's flipper in millimeters"
+    )
+    body_mass_g: float = Field(
+        description="Body mass of the penguin in grams"
+    )
+    sex: Literal["Male", "Female"] = Field(description="Sex of the penguin")
+    island: Literal["Torgersen", "Biscoe", "Dream"] = Field(
+        description="Island where the penguin was observed"
     )
 
 
-class SurvivalPrediction(BaseModel):
-    """Output prediction for Titanic survival."""
+class SpeciesPrediction(BaseModel):
+    """Output prediction for penguin species classification."""
 
-    survived: Literal["yes", "no"] = Field(description="Whether the passenger survived")
+    species: Literal["Adelie", "Chinstrap", "Gentoo"] = Field(
+        description="Predicted penguin species"
+    )
     confidence: float = Field(
         description="Confidence score between 0 and 1", ge=0.0, le=1.0
     )
@@ -60,49 +67,54 @@ class SurvivalPrediction(BaseModel):
     )
 
 
-# Step 2: Load and prepare the Titanic dataset
-def load_titanic_data(
-    n_train: int = 20, n_holdout: int = 10
+# Step 2: Load and prepare the Palmer Penguins dataset
+def load_penguins_data(
+    n_train: int = 30, n_holdout: int = 15
 ) -> tuple[
-    list[DataInstWithInput[PassengerInput]], list[DataInstWithInput[PassengerInput]]
+    list[DataInstWithInput[PenguinInput]], list[DataInstWithInput[PenguinInput]]
 ]:
-    """Load and prepare Titanic dataset for GEPA with holdout test set.
+    """Load and prepare Palmer Penguins dataset for GEPA with holdout test set.
 
     This function uses stratified sampling to ensure balanced class distributions
     in both training and holdout sets. It leverages the existing data_utils helpers
     to convert the DataFrame directly into DataInstWithInput format.
 
     Args:
-        n_train: Number of samples to use for training/validation (default 20)
-        n_holdout: Number of samples to hold out for final testing (default 10)
+        n_train: Number of samples to use for training/validation (default 30)
+        n_holdout: Number of samples to hold out for final testing (default 15)
 
     Returns:
         Tuple of (training_dataset, holdout_dataset) as DataInstWithInput lists
-        with balanced survival class distributions
+        with balanced species class distributions
     """
-    # Load Titanic dataset from seaborn
+    # Load Palmer Penguins dataset from seaborn
     try:
         import seaborn as sns
 
-        df = sns.load_dataset("titanic")
+        df = sns.load_dataset("penguins")
     except Exception as e:
         print(f"Error loading dataset: {e}")
         print("Make sure seaborn is installed: pip install seaborn")
         raise
 
-    # Select interesting features and clean data
+    # Select features and clean data
     df = df[
-        ["pclass", "sex", "age", "sibsp", "parch", "fare", "embarked", "survived"]
+        [
+            "bill_length_mm",
+            "bill_depth_mm",
+            "flipper_length_mm",
+            "body_mass_g",
+            "sex",
+            "island",
+            "species",
+        ]
     ].copy()
 
-    # Drop rows with missing critical values
-    df = df.dropna(subset=["age", "fare"])
+    # Drop rows with missing values
+    df = df.dropna()
 
-    # Fill missing embarked with 'Unknown'
-    df["embarked"] = df["embarked"].fillna("Unknown")
-
-    # Convert survived to string labels for metadata
-    df["label"] = df["survived"].map({0: "no", 1: "yes"})
+    # Store species as label for metadata
+    df["label"] = df["species"]
 
     # Perform stratified sampling to maintain class balance
     # This ensures both train and holdout sets have representative distributions
@@ -113,7 +125,7 @@ def load_titanic_data(
         df_subset, _ = train_test_split(
             df,
             train_size=total_needed,
-            stratify=df["survived"],
+            stratify=df["species"],
             random_state=42,
         )
     else:
@@ -124,40 +136,39 @@ def load_titanic_data(
         df_subset,
         train_size=n_train,
         test_size=min(n_holdout, len(df_subset) - n_train),
-        stratify=df_subset["survived"],
+        stratify=df_subset["species"],
         random_state=42,
     )
 
-    # Define a mapper function to convert DataFrame rows to PassengerInput
-    def row_to_passenger_input(row: pd.Series) -> PassengerInput:
-        """Convert a DataFrame row to a PassengerInput instance.
+    # Define a mapper function to convert DataFrame rows to PenguinInput
+    def row_to_penguin_input(row: pd.Series) -> PenguinInput:
+        """Convert a DataFrame row to a PenguinInput instance.
 
         Args:
-            row: pandas Series representing a single passenger record
+            row: pandas Series representing a single penguin observation
 
         Returns:
-            PassengerInput instance with the passenger's features
+            PenguinInput instance with the penguin's features
         """
-        return PassengerInput(
-            passenger_class=int(row["pclass"]),
+        return PenguinInput(
+            bill_length_mm=float(row["bill_length_mm"]),
+            bill_depth_mm=float(row["bill_depth_mm"]),
+            flipper_length_mm=float(row["flipper_length_mm"]),
+            body_mass_g=float(row["body_mass_g"]),
             sex=str(row["sex"]),
-            age=float(row["age"]),
-            siblings_spouses=int(row["sibsp"]),
-            parents_children=int(row["parch"]),
-            fare=float(row["fare"]),
-            embarked=str(row["embarked"]),
+            island=str(row["island"]),
         )
 
     # Convert DataFrames to datasets using our helper function
     train_dataset = dataframe_to_dataset(
         df_train,
-        row_mapper=row_to_passenger_input,
-        metadata_cols=["label"],  # Only include the survival label in metadata
+        row_mapper=row_to_penguin_input,
+        metadata_cols=["label"],  # Only include the species label in metadata
     )
 
     holdout_dataset = dataframe_to_dataset(
         df_holdout,
-        row_mapper=row_to_passenger_input,
+        row_mapper=row_to_penguin_input,
         metadata_cols=["label"],
     )
 
@@ -166,28 +177,32 @@ def load_titanic_data(
 
 # Step 3: Helper function for classification metrics
 def calculate_classification_metrics(
-    predictions: list[str], actuals: list[str], label_name: str = "survived"
+    predictions: list[str], actuals: list[str], label_name: str = "species"
 ) -> dict[str, float]:
-    """Calculate precision, recall, F1, and confusion matrix for binary classification.
+    """Calculate precision, recall, F1, and confusion matrix for multi-class classification.
     
     Args:
-        predictions: List of predicted labels ("yes" or "no")
-        actuals: List of actual labels ("yes" or "no")
+        predictions: List of predicted labels (species names)
+        actuals: List of actual labels (species names)
         label_name: Name of the label being predicted (for display)
     
     Returns:
         Dictionary containing accuracy, precision, recall, F1, and confusion matrix
     """
-    # Convert to binary (1 for "yes", 0 for "no")
-    y_pred = [1 if p == "yes" else 0 for p in predictions]
-    y_true = [1 if a == "yes" else 0 for a in actuals]
+    # Get unique classes
+    classes = sorted(list(set(actuals + predictions)))
+    class_to_idx = {cls: idx for idx, cls in enumerate(classes)}
+    
+    # Convert to numeric labels
+    y_pred = [class_to_idx[p] for p in predictions]
+    y_true = [class_to_idx[a] for a in actuals]
     
     # Calculate metrics
     accuracy = sum(p == t for p, t in zip(y_pred, y_true)) / len(y_pred) if y_pred else 0.0
     
-    # Calculate precision, recall, F1 for both classes
+    # Calculate precision, recall, F1 for each class
     precision, recall, f1, support = precision_recall_fscore_support(
-        y_true, y_pred, average=None, zero_division=0
+        y_true, y_pred, average=None, zero_division=0, labels=list(range(len(classes)))
     )
     
     # Calculate macro averages
@@ -196,27 +211,25 @@ def calculate_classification_metrics(
     )
     
     # Confusion matrix
-    cm = confusion_matrix(y_true, y_pred)
+    cm = confusion_matrix(y_true, y_pred, labels=list(range(len(classes))))
     
-    return {
+    result = {
         "accuracy": accuracy,
-        "precision_no": precision[0],
-        "recall_no": recall[0],
-        "f1_no": f1[0],
-        "support_no": support[0],
-        "precision_yes": precision[1],
-        "recall_yes": recall[1],
-        "f1_yes": f1[1],
-        "support_yes": support[1],
         "precision_macro": precision_macro,
         "recall_macro": recall_macro,
         "f1_macro": f1_macro,
         "confusion_matrix": cm,
-        "tn": cm[0, 0],  # True negatives (predicted no, actual no)
-        "fp": cm[0, 1],  # False positives (predicted yes, actual no)
-        "fn": cm[1, 0],  # False negatives (predicted no, actual yes)
-        "tp": cm[1, 1],  # True positives (predicted yes, actual yes)
+        "classes": classes,
     }
+    
+    # Add per-class metrics
+    for idx, cls in enumerate(classes):
+        result[f"precision_{cls}"] = precision[idx]
+        result[f"recall_{cls}"] = recall[idx]
+        result[f"f1_{cls}"] = f1[idx]
+        result[f"support_{cls}"] = support[idx]
+    
+    return result
 
 
 def print_classification_report(
@@ -238,23 +251,42 @@ def print_classification_report(
     print(f"{'F1-Score (Macro)':<20} {metrics['f1_macro']:<15.3f}")
     print("-" * 50)
     
+    # Print per-class metrics
+    classes = metrics.get("classes", [])
+    if classes:
+        print("\nPer-Class Metrics:")
+        print(f"{'Class':<15} {'Precision':<12} {'Recall':<12} {'F1-Score':<12} {'Support':<10}")
+        print("-" * 60)
+        for cls in classes:
+            precision = metrics.get(f"precision_{cls}", 0.0)
+            recall = metrics.get(f"recall_{cls}", 0.0)
+            f1 = metrics.get(f"f1_{cls}", 0.0)
+            support = metrics.get(f"support_{cls}", 0)
+            print(f"{cls:<15} {precision:<12.3f} {recall:<12.3f} {f1:<12.3f} {support:<10.0f}")
+    
     # Print confusion matrix
-    print("\nConfusion Matrix:")
-    print("                 Predicted")
-    print("                 No    Yes")
-    print(f"Actual   No     {metrics['tn']:<5} {metrics['fp']:<5}")
-    print(f"         Yes    {metrics['fn']:<5} {metrics['tp']:<5}")
+    cm = metrics.get("confusion_matrix")
+    if cm is not None and classes:
+        print("\nConfusion Matrix:")
+        print("                 Predicted")
+        # Print header
+        header = "Actual           " + "  ".join([f"{cls[:8]:>8}" for cls in classes])
+        print(header)
+        # Print rows
+        for i, cls in enumerate(classes):
+            row = f"{cls[:15]:<15}  " + "  ".join([f"{cm[i][j]:>8}" for j in range(len(classes))])
+            print(row)
     print("-" * 50)
 
 
 # Step 4: Define evaluation metric
-def survival_metric(
-    data_inst: DataInstWithInput[PassengerInput],
-    output: RolloutOutput[SurvivalPrediction],
+def species_metric(
+    data_inst: DataInstWithInput[PenguinInput],
+    output: RolloutOutput[SpeciesPrediction],
 ) -> tuple[float, str | None]:
-    """Evaluate survival prediction accuracy.
+    """Evaluate species prediction accuracy.
 
-    This metric checks if the predicted survival matches the ground truth.
+    This metric checks if the predicted species matches the ground truth.
     It also considers confidence calibration as a bonus.
 
     Args:
@@ -268,8 +300,8 @@ def survival_metric(
     if not output.success or output.result is None:
         return 0.0, output.error_message or "Agent failed to produce output"
 
-    # Extract predicted survival
-    predicted_survival = output.result.survived
+    # Extract predicted species
+    predicted_species = output.result.species
     confidence = output.result.confidence
     reasoning = output.result.reasoning
 
@@ -279,46 +311,27 @@ def survival_metric(
     if ground_truth is None:
         return 0.0, "No ground truth label found in metadata"
     
-    # Determine confusion matrix outcome
-    is_positive_prediction = predicted_survival == "yes"
-    is_positive_ground_truth = ground_truth == "yes"
+    # Check if prediction is correct
+    is_correct = predicted_species == ground_truth
 
-    TP = int(is_positive_ground_truth and is_positive_prediction)
-    FN = int(is_positive_ground_truth and not is_positive_prediction)
-    FP = int(not is_positive_ground_truth and is_positive_prediction)
-    TN = int(not is_positive_ground_truth and not is_positive_prediction)
-
-    # Base score: correct prediction gets 1.0, incorrect gets 0.0
-    if TP:
-        # Bonus for high confidence on correct predictions
+    if is_correct:
+        # Correct prediction: base score + confidence bonus
         score = 0.7 + (0.3 * confidence)
-        feedback = f"✅ True Positive: predicted '{predicted_survival}', actual '{ground_truth}' (confidence: {confidence:.2f}).\n"
-        
-    elif FN:
+        feedback = f"✅ Correct: predicted '{predicted_species}', actual '{ground_truth}' (confidence: {confidence:.2f}).\n"
+    else:
+        # Incorrect prediction: small score if low confidence
         score = 0.3 * (1 - confidence)
-        feedback = f"❌ False Negative: predicted '{predicted_survival}', but actual was '{ground_truth}' (confidence: {confidence:.2f}).\n"
-        feedback += f"Your reasoning: {reasoning}"
-        feedback += "\nReflect on what aspects of prior reasoning might have led to this error, and how we can improve prediction recall."
-        feedback += f"\nPrior reasoning: {reasoning}"
-        
-    elif FP:
-        score = 0.3 * (1 - confidence)
-        feedback = f"⚠️ False Positive: predicted '{predicted_survival}', but actual was '{ground_truth}' (confidence: {confidence:.2f}).\n"
-        feedback += f"Your reasoning: {reasoning}"
-        feedback += "\nReflect on what aspects of prior reasoning might have led to this error, and how we can improve prediction precision."
-        feedback += f"\nPrior reasoning: {reasoning}"
-        
-    elif TN:
-        score = 0.7 + (0.3 * confidence)
-        feedback = f"✅ True Negative: predicted '{predicted_survival}', actual '{ground_truth}' (confidence: {confidence:.2f}).\n"
+        feedback = f"❌ Incorrect: predicted '{predicted_species}', but actual was '{ground_truth}' (confidence: {confidence:.2f}).\n"
+        feedback += f"Your reasoning: {reasoning}\n"
+        feedback += "Reflect on what aspects of the penguin's measurements might have led to this error. "
+        feedback += f"Consider the distinguishing features between {predicted_species} and {ground_truth} penguins."
 
     return score, feedback
 
 
-
 # Step 5: Main optimization pipeline
 def main():
-    """Run the GEPA optimization for Titanic survival prediction."""
+    """Run the GEPA optimization for Palmer Penguins species classification."""
 
     print("\n" + "=" * 70)
     print("DATASET PREPARATION")
@@ -326,26 +339,33 @@ def main():
     
     # First, load the raw dataset to show original distribution before sampling
     # This helps users understand the baseline class distribution and sample size
-    print("\n📊 Loading Raw Titanic Dataset...")
+    print("\n📊 Loading Raw Palmer Penguins Dataset...")
     try:
         import seaborn as sns
-        df_raw = sns.load_dataset("titanic")
+        df_raw = sns.load_dataset("penguins")
         
-        # Clean the data the same way as in load_titanic_data
+        # Clean the data the same way as in load_penguins_data
         df_clean = df_raw[
-            ["pclass", "sex", "age", "sibsp", "parch", "fare", "embarked", "survived"]
+            [
+                "bill_length_mm",
+                "bill_depth_mm",
+                "flipper_length_mm",
+                "body_mass_g",
+                "sex",
+                "island",
+                "species",
+            ]
         ].copy()
-        df_clean = df_clean.dropna(subset=["age", "fare"])
+        df_clean = df_clean.dropna()
         
         # Show raw dataset statistics
         total_raw = len(df_clean)
-        raw_survived_counts = df_clean["survived"].value_counts().sort_index()
+        raw_species_counts = df_clean["species"].value_counts().sort_index()
         
-        print("\n📈 Raw Dataset (after removing missing age/fare):")
-        print(f"   └─ Total Passengers: {total_raw}")
-        print(f"   └─ Survived=0 (Died): {raw_survived_counts.get(0, 0)} ({raw_survived_counts.get(0, 0)/total_raw:.1%})")
-        print(f"   └─ Survived=1 (Lived): {raw_survived_counts.get(1, 0)} ({raw_survived_counts.get(1, 0)/total_raw:.1%})")
-        print(f"   └─ Class Balance Ratio: {raw_survived_counts.get(1, 0)/raw_survived_counts.get(0, 1):.2f}:1 (survived:died)")
+        print("\n📈 Raw Dataset (after removing missing values):")
+        print(f"   └─ Total Penguins: {total_raw}")
+        for species, count in raw_species_counts.items():
+            print(f"   └─ {species}: {count} ({count/total_raw:.1%})")
         
     except Exception as e:
         print(f"   ⚠️  Could not load raw dataset: {e}")
@@ -353,42 +373,42 @@ def main():
     print("\n" + "-" * 70)
 
     # Load the data with train/holdout split - now returns datasets directly
-    n_train = 20
-    n_holdout = 20
-    train_dataset, holdout_dataset = load_titanic_data(n_train=n_train, n_holdout=n_holdout)
+    n_train = 15
+    n_holdout = 15
+    train_dataset, holdout_dataset = load_penguins_data(n_train=n_train, n_holdout=n_holdout)
 
     # Calculate total dataset size
     total_samples = len(train_dataset) + len(holdout_dataset)
     
-    print(f"\n📊 Sampled Subset for This Run: {total_samples} passengers")
+    print(f"\n📊 Sampled Subset for This Run: {total_samples} penguins")
     print(f"   └─ Training Pool: {len(train_dataset)} ({len(train_dataset)/total_samples:.1%})")
     print(f"   └─ Holdout Test: {len(holdout_dataset)} ({len(holdout_dataset)/total_samples:.1%})")
     print("   └─ Sampling Strategy: Stratified (maintains class balance)")
 
-    # Show survival statistics for training pool
-    train_survival_counts = {}
+    # Show species statistics for training pool
+    train_species_counts = {}
     for data_inst in train_dataset:
         label = data_inst.metadata.get("label")
-        train_survival_counts[label] = train_survival_counts.get(label, 0) + 1
+        train_species_counts[label] = train_species_counts.get(label, 0) + 1
 
-    # Show survival statistics for holdout
-    holdout_survival_counts = {}
+    # Show species statistics for holdout
+    holdout_species_counts = {}
     for data_inst in holdout_dataset:
         label = data_inst.metadata.get("label")
-        holdout_survival_counts[label] = holdout_survival_counts.get(label, 0) + 1
+        holdout_species_counts[label] = holdout_species_counts.get(label, 0) + 1
 
     print("\n📈 Training Pool Class Distribution:")
-    for label in sorted(train_survival_counts.keys()):
-        count = train_survival_counts[label]
-        print(f"   └─ Survived={label}: {count} ({count/len(train_dataset):.1%})")
+    for label in sorted(train_species_counts.keys()):
+        count = train_species_counts[label]
+        print(f"   └─ {label}: {count} ({count/len(train_dataset):.1%})")
     
     print("\n📈 Holdout Test Class Distribution:")
-    for label in sorted(holdout_survival_counts.keys()):
-        count = holdout_survival_counts[label]
-        print(f"   └─ Survived={label}: {count} ({count/len(holdout_dataset):.1%})")
+    for label in sorted(holdout_species_counts.keys()):
+        count = holdout_species_counts[label]
+        print(f"   └─ {label}: {count} ({count/len(holdout_dataset):.1%})")
 
     # Split the training dataset into train/val using our helper
-    train_ratio = 0.50
+    train_ratio = 0.60
     trainset, valset = split_dataset(
         train_dataset, train_ratio=train_ratio, shuffle=True, random_seed=1
     )
@@ -411,12 +431,12 @@ def main():
     print("\n   Training Set Distribution:")
     for label in sorted(train_split_counts.keys()):
         count = train_split_counts[label]
-        print(f"      └─ Survived={label}: {count} ({count/len(trainset):.1%})")
+        print(f"      └─ {label}: {count} ({count/len(trainset):.1%})")
     
     print("\n   Validation Set Distribution:")
     for label in sorted(val_split_counts.keys()):
         count = val_split_counts[label]
-        print(f"      └─ Survived={label}: {count} ({count/len(valset):.1%})")
+        print(f"      └─ {label}: {count} ({count/len(valset):.1%})")
     
     print("=" * 70)
     
@@ -429,14 +449,16 @@ def main():
         # Agent configuration
         agent_model=agent_model,
         agent_instructions=(
-            "Predict the survival of the Titanic passenger based on the given features."
+            "Classify the penguin species based on the given physical measurements and location. "
+            "Consider bill dimensions, flipper length, body mass, sex, and island to distinguish "
+            "between Adelie, Chinstrap, and Gentoo penguins."
         ),
-        input_type=PassengerInput,
-        output_type=SurvivalPrediction,
+        input_type=PenguinInput,
+        output_type=SpeciesPrediction,
         # Data and evaluation
         trainset=trainset,
         valset=valset,
-        metric=survival_metric,
+        metric=species_metric,
         # Budget
         max_full_evals=3,
         # Optimization parameters
@@ -462,14 +484,14 @@ def main():
     print("\n" + "=" * 70)
     print("OPTIMIZATION CONFIGURATION")
     print("=" * 70)
-    print("\n🎯 Task: Titanic Survival Prediction")
+    print("\n🎯 Task: Palmer Penguins Species Classification")
     print("\n🤖 Models:")
     print(f"   └─ Agent Model: {config.agent_model}")
     print(f"   └─ Reflection Model: {config.reflection_model}")
     print("\n📚 Dataset Configuration:")
-    print(f"   └─ Training Set: {len(config.trainset)} passengers")
-    print(f"   └─ Validation Set: {len(config.valset) if config.valset else 0} passengers")
-    print(f"   └─ Holdout Test: {len(holdout_dataset)} passengers (for final evaluation)")
+    print(f"   └─ Training Set: {len(config.trainset)} penguins")
+    print(f"   └─ Validation Set: {len(config.valset) if config.valset else 0} penguins")
+    print(f"   └─ Holdout Test: {len(holdout_dataset)} penguins (for final evaluation)")
     print("\n⚙️  Optimization Settings:")
     print(f"   └─ Max Full Evaluations: {config.max_full_evals}")
     print(f"   └─ Max Metric Calls: {config.estimated_metric_calls}")
@@ -484,7 +506,7 @@ def main():
     print("\n" + "=" * 70)
     print("PRE-OPTIMIZATION BASELINE EVALUATION")
     print("=" * 70)
-    print(f"\nEvaluating baseline agent on holdout set ({len(holdout_dataset)} passengers)...")
+    print(f"\nEvaluating baseline agent on holdout set ({len(holdout_dataset)} penguins)...")
     baseline_correct_predictions = 0
     baseline_total_predictions = 0
     baseline_results_table = []
@@ -493,22 +515,22 @@ def main():
     baseline_agent = Agent(
         model=get_openai_model(config.agent_model),
         instructions=config.agent_instructions,
-        output_type=SurvivalPrediction,
+        output_type=SpeciesPrediction,
     )
 
     baseline_signature_agent = SignatureAgent(
         baseline_agent,
-        input_type=PassengerInput,
+        input_type=PenguinInput,
     )
 
     for i, data_inst in enumerate(holdout_dataset, 1):
-        # Input is already a PassengerInput instance
+        # Input is already a PenguinInput instance
         test_input = data_inst.input
 
         # Get ground truth from metadata
         actual = data_inst.metadata.get("label")
         test_result = baseline_signature_agent.run_signature_sync(test_input)
-        predicted = test_result.output.survived
+        predicted = test_result.output.species
         confidence = test_result.output.confidence
         reasoning = test_result.output.reasoning
 
@@ -522,9 +544,12 @@ def main():
         baseline_results_table.append(
             {
                 "case": i,
-                "class": test_input.passenger_class,
+                "bill_length": test_input.bill_length_mm,
+                "bill_depth": test_input.bill_depth_mm,
+                "flipper_length": test_input.flipper_length_mm,
+                "body_mass": test_input.body_mass_g,
                 "sex": test_input.sex,
-                "age": test_input.age,
+                "island": test_input.island,
                 "predicted": predicted,
                 "actual": actual,
                 "confidence": confidence,
@@ -540,22 +565,23 @@ def main():
     
     # Print baseline results
     print("\n📋 Baseline Prediction Details:")
-    print("-" * 100)
+    print("-" * 110)
     print(
-        f"{'#':<4} {'Class':<6} {'Sex':<7} {'Age':<5} {'Predicted':<10} {'Actual':<10} {'Conf':<6} {'Result':<8}"
+        f"{'#':<4} {'Island':<10} {'Sex':<7} {'Bill L':<8} {'Bill D':<8} {'Predicted':<12} {'Actual':<12} {'Conf':<6} {'Result':<8}"
     )
-    print("-" * 100)
+    print("-" * 110)
     for row in baseline_results_table:
         result_symbol = "✓" if row["correct"] else "✗"
         print(
-            f"{row['case']:<4} {row['class']:<6} {row['sex']:<7} {row['age']:<5.0f} {row['predicted']:<10} {row['actual']:<10} {row['confidence']:<6.2f} {result_symbol:<8}"
+            f"{row['case']:<4} {row['island']:<10} {row['sex']:<7} {row['bill_length']:<8.1f} {row['bill_depth']:<8.1f} "
+            f"{row['predicted']:<12} {row['actual']:<12} {row['confidence']:<6.2f} {result_symbol:<8}"
         )
-    print("-" * 100)
+    print("-" * 110)
     baseline_accuracy = baseline_correct_predictions / baseline_total_predictions
     print(
         f"📊 BASELINE ACCURACY: {baseline_accuracy:.2%} ({baseline_correct_predictions}/{baseline_total_predictions})"
     )
-    print("-" * 100)
+    print("-" * 110)
     
     # Print detailed classification metrics
     print_classification_report(baseline_metrics, "📊 Baseline Classification Report")
@@ -626,13 +652,13 @@ def main():
         print("\n" + "=" * 70)
         print("POST-OPTIMIZATION HOLDOUT EVALUATION")
         print("=" * 70)
-        print(f"\nEvaluating optimized agent on holdout test set ({len(holdout_dataset)} passengers)...")
+        print(f"\nEvaluating optimized agent on holdout test set ({len(holdout_dataset)} penguins)...")
 
         # Create and configure agent
         test_agent = Agent(
             model=get_openai_model(config.agent_model),
             instructions=config.agent_instructions,
-            output_type=SurvivalPrediction,
+            output_type=SpeciesPrediction,
         )
 
 
@@ -642,15 +668,15 @@ def main():
         results_table = []
 
         # Apply optimized configuration and test on holdout set
-        with result.apply_best_to(agent=test_agent, input_type=PassengerInput):
+        with result.apply_best_to(agent=test_agent, input_type=PenguinInput):
             
             test_signature_agent = SignatureAgent(
                 test_agent,
-                input_type=PassengerInput,
+                input_type=PenguinInput,
                 optimize_tools=True,
             )
             for i, data_inst in enumerate(holdout_dataset, 1):
-                # Input is already a PassengerInput instance
+                # Input is already a PenguinInput instance
                 test_input = data_inst.input
 
                 # Get ground truth from metadata
@@ -659,7 +685,7 @@ def main():
                 # Run prediction
                 try:
                     test_result = test_signature_agent.run_signature_sync(test_input)
-                    predicted = test_result.output.survived
+                    predicted = test_result.output.species
                     confidence = test_result.output.confidence
                     reasoning = test_result.output.reasoning
 
@@ -673,9 +699,12 @@ def main():
                     results_table.append(
                         {
                             "case": i,
-                            "class": test_input.passenger_class,
+                            "bill_length": test_input.bill_length_mm,
+                            "bill_depth": test_input.bill_depth_mm,
+                            "flipper_length": test_input.flipper_length_mm,
+                            "body_mass": test_input.body_mass_g,
                             "sex": test_input.sex,
-                            "age": test_input.age,
+                            "island": test_input.island,
                             "predicted": predicted,
                             "actual": actual,
                             "confidence": confidence,
@@ -689,9 +718,12 @@ def main():
                     results_table.append(
                         {
                             "case": i,
-                            "class": test_input.passenger_class,
+                            "bill_length": test_input.bill_length_mm,
+                            "bill_depth": test_input.bill_depth_mm,
+                            "flipper_length": test_input.flipper_length_mm,
+                            "body_mass": test_input.body_mass_g,
                             "sex": test_input.sex,
-                            "age": test_input.age,
+                            "island": test_input.island,
                             "predicted": "ERROR",
                             "actual": actual,
                             "confidence": 0.0,
@@ -709,20 +741,20 @@ def main():
         
         # Print results table
         print("\n📋 Optimized Agent Prediction Details:")
-        print("-" * 100)
+        print("-" * 110)
         print(
-            f"{'#':<4} {'Class':<6} {'Sex':<7} {'Age':<5} {'Predicted':<10} {'Actual':<10} {'Conf':<6} {'Result':<8}"
+            f"{'#':<4} {'Island':<10} {'Sex':<7} {'Bill L':<8} {'Bill D':<8} {'Predicted':<12} {'Actual':<12} {'Conf':<6} {'Result':<8}"
         )
-        print("-" * 100)
+        print("-" * 110)
 
         for row in results_table:
             result_symbol = "✓" if row["correct"] else "✗"
             print(
-                f"{row['case']:<4} {row['class']:<6} {row['sex']:<7} {row['age']:<5.0f} "
-                f"{row['predicted']:<10} {row['actual']:<10} {row['confidence']:<6.2f} {result_symbol:<8}"
+                f"{row['case']:<4} {row['island']:<10} {row['sex']:<7} {row['bill_length']:<8.1f} {row['bill_depth']:<8.1f} "
+                f"{row['predicted']:<12} {row['actual']:<12} {row['confidence']:<6.2f} {result_symbol:<8}"
             )
 
-        print("-" * 100)
+        print("-" * 110)
 
         # Calculate and display accuracy
         if total_predictions > 0:
@@ -740,7 +772,7 @@ def main():
                     f"({baseline_accuracy:.2%} → {optimized_accuracy:.2%})"
                 )
         
-        print("-" * 100)
+        print("-" * 110)
         
         # Print detailed classification metrics
         if optimized_predictions:
@@ -757,7 +789,11 @@ def main():
     for i, row in enumerate(results_table[:5], 1):  # Show first 5
         result_symbol = "✓ CORRECT" if row["correct"] else "✗ INCORRECT"
         print(f"\n--- Case {row['case']} ({result_symbol}) ---")
-        print(f"Passenger: Class {row['class']}, {row['sex']}, age {row['age']:.0f}")
+        print(
+            f"Penguin: {row['island']} island, {row['sex']}, "
+            f"bill {row['bill_length']:.1f}mm x {row['bill_depth']:.1f}mm, "
+            f"flipper {row['flipper_length']:.0f}mm, {row['body_mass']:.0f}g"
+        )
         print(
             f"Predicted: {row['predicted'].upper()} (confidence: {row['confidence']:.2%})"
         )
