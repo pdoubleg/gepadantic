@@ -12,7 +12,7 @@ from pydantic_ai.models.test import TestModel
 from gepadantic.cache import CacheManager, create_cached_metric
 from gepadantic.reflection import ProposalOutput, UpdatedComponent
 from gepadantic.runner import optimize_agent_prompts
-from gepadantic.types import DataInstWithInput, DataInstWithPrompt, RolloutOutput
+from gepadantic.schema import DataInstWithInput, DataInstWithPrompt, RolloutOutput
 
 
 def test_cache_manager_basic():
@@ -314,7 +314,7 @@ def test_cache_agent_runs():
         )
 
         output = RolloutOutput.from_success("Agent result")
-        from gepadantic.types import Trajectory
+        from gepadantic.schema import Trajectory
 
         trajectory = Trajectory(messages=[], final_output="Agent result", error=None)
         candidate = {"instructions": "Test instructions"}

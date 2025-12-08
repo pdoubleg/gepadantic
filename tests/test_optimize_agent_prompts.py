@@ -22,7 +22,7 @@ from gepadantic.components import (
 from gepadantic.reflection import ProposalOutput, UpdatedComponent
 from gepadantic.runner import optimize_agent_prompts
 from gepadantic.signature_agent import SignatureAgent
-from gepadantic.types import (
+from gepadantic.schema import (
     DataInst,
     DataInstWithInput,
     DataInstWithPrompt,

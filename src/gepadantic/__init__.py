@@ -24,7 +24,7 @@ from .signature import (
     get_gepa_components,
 )
 from .signature_agent import SignatureAgent
-from .types import DataInst, RolloutOutput, Trajectory, OutputT
+from .schema import DataInst, RolloutOutput, Trajectory, OutputT
 from .components import apply_candidate_to_signature_model, apply_candidate_to_tool_model
 from .lm import GEPALanguageModel, get_openai_model
 

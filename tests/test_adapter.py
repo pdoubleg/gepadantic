@@ -13,7 +13,7 @@ from gepadantic.components import (
     extract_seed_candidate,
     get_component_names,
 )
-from gepadantic.types import DataInst, DataInstWithPrompt, RolloutOutput
+from gepadantic.schema import DataInst, DataInstWithPrompt, RolloutOutput
 
 
 def test_extract_seed_candidate():

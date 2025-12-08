@@ -1,0 +1,72 @@
+site_name: GEPAdantic
+site_description: GEPA-driven prompt optimization for pydantic-ai agents
+site_url: https://pdoubleg.github.io/gepadantic
+repo_url: https://github.com/pdoubleg/gepadantic
+repo_name: pdoubleg/gepadantic
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            docstring_style: google
+            show_source: true
+            show_root_heading: true
+            show_signature_annotations: true
+            separate_signature: true
+            merge_init_into_class: true
+            docstring_section_style: table
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - admonition
+  - pymdownx.details
+  - pymdownx.tabbed:
+      alternate_style: true
+  - attr_list
+  - md_in_html
+  - tables
+
+nav:
+  - Home: index.md
+  - Core Concepts:
+      - core-concepts/index.md
+      - Scaffold: core-concepts/scaffold.md
+      - SignatureAgent: core-concepts/signature-agent.md
+      - Adapter: core-concepts/adapter.md
+      - Runner: core-concepts/runner.md
+      - Data Utils: core-concepts/data-utils.md
+  - User Guides:
+      - Getting Started: user-guides/getting-started.md
+  - API Reference: api/index.md

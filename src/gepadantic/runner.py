@@ -28,7 +28,7 @@ from .components import (
 )
 from .lm import GEPALanguageModel
 from .signature import InputSpec
-from .types import DataInst, RolloutOutput
+from .schema import DataInst, RolloutOutput
 
 # Type variable for the DataInst type
 DataInstT = TypeVar("DataInstT", bound=DataInst)

@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from pydantic_ai import Agent
 from pydantic_ai.models.test import TestModel
 
-from gepadantic.types import DataInst
+from gepadantic.schema import DataInst
 from gepadantic.adapter import PydanticAIGEPAAdapter
 from gepadantic.components import extract_seed_candidate_with_signature
 from gepadantic.signature import (

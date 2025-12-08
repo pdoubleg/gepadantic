@@ -13,7 +13,7 @@ from typing import Any, TypeVar
 
 from pydantic import BaseModel
 
-from .types import DataInstWithInput
+from .schema import DataInstWithInput
 
 # Type variable for input models
 InputModelT = TypeVar("InputModelT", bound=BaseModel)

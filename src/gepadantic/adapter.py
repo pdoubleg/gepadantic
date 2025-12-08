@@ -19,7 +19,7 @@ from .reflection import propose_new_texts
 from .signature import BoundInputSpec, InputSpec, build_input_spec
 from .signature_agent import SignatureAgent
 from .cache import CacheManager
-from .types import DataInst, DataInstWithPrompt, RolloutOutput, Trajectory
+from .schema import DataInst, DataInstWithPrompt, RolloutOutput, Trajectory
 
 logger = logging.getLogger(__name__)
 
@@ -325,7 +325,7 @@ class PydanticAIGEPAAdapter(
                 instructions=instructions_text,
                 final_output=final_output,
                 error=None,
-                usage=asdict(result.usage()),  # Convert RunUsage to dict
+                usage=asdict(result.usage()),
                 data_inst=instance,
             )
             output = RolloutOutput.from_success(final_output)

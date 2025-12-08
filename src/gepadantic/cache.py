@@ -10,7 +10,7 @@ from typing import Any, Callable, TypeVar
 
 import cloudpickle
 
-from .types import (
+from .schema import (
     DataInst,
     DataInstWithPrompt,
     DataInstWithInput,
