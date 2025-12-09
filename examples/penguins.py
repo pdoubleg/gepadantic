@@ -19,6 +19,9 @@ from typing import Literal
 import pandas as pd
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent
+from rich.console import Console
+from rich.panel import Panel
+from rich.text import Text
 from sklearn.metrics import precision_recall_fscore_support, confusion_matrix
 from sklearn.model_selection import train_test_split
 
@@ -27,9 +30,11 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.gepadantic.data_utils import dataframe_to_dataset, split_dataset
 from src.gepadantic.lm import get_openai_model
 from src.gepadantic.scaffold import GepaConfig, run_optimization_pipeline
-from src.gepadantic.types import DataInstWithInput, RolloutOutput
+from src.gepadantic.schema import DataInstWithInput, RolloutOutput
 from src.gepadantic.signature_agent import SignatureAgent
+from src.gepadantic.loggers import RichConsoleLogger
 
+console = Console()
 
 # Step 1: Define input and output models
 class PenguinInput(BaseModel):
@@ -241,42 +246,44 @@ def print_classification_report(
         metrics: Dictionary of metrics from calculate_classification_metrics
         title: Title for the report section
     """
-    print(f"\n{title}:")
-    print("-" * 50)
-    print(f"{'Metric':<20} {'Value':<15}")
-    print("-" * 50)
-    print(f"{'Accuracy':<20} {metrics['accuracy']:<15.3f}")
-    print(f"{'Precision (Macro)':<20} {metrics['precision_macro']:<15.3f}")
-    print(f"{'Recall (Macro)':<20} {metrics['recall_macro']:<15.3f}")
-    print(f"{'F1-Score (Macro)':<20} {metrics['f1_macro']:<15.3f}")
-    print("-" * 50)
+    console.print(f"\n{title}:")
+    console.print("-" * 50)
+    console.print(f"{'Metric':<20} {'Value':<15}")
+    console.print("-" * 50)
+    console.print(f"{'Accuracy':<20} {metrics['accuracy']:<15.3f}")
+    console.print(f"{'Precision (Macro)':<20} {metrics['precision_macro']:<15.3f}")
+    console.print(f"{'Recall (Macro)':<20} {metrics['recall_macro']:<15.3f}")
+    console.print(f"{'F1-Score (Macro)':<20} {metrics['f1_macro']:<15.3f}")
+    console.print("-" * 50)
     
     # Print per-class metrics
     classes = metrics.get("classes", [])
     if classes:
-        print("\nPer-Class Metrics:")
-        print(f"{'Class':<15} {'Precision':<12} {'Recall':<12} {'F1-Score':<12} {'Support':<10}")
-        print("-" * 60)
+        console.print("\nPer-Class Metrics:")
+        console.print(f"{'Class':<15} {'Precision':<12} {'Recall':<12} {'F1-Score':<12} {'Support':<10}")
+        console.print("-" * 60)
+        console.print(f"{'Class':<15} {'Precision':<12} {'Recall':<12} {'F1-Score':<12} {'Support':<10}")
+        console.print("-" * 60)
         for cls in classes:
             precision = metrics.get(f"precision_{cls}", 0.0)
             recall = metrics.get(f"recall_{cls}", 0.0)
             f1 = metrics.get(f"f1_{cls}", 0.0)
             support = metrics.get(f"support_{cls}", 0)
-            print(f"{cls:<15} {precision:<12.3f} {recall:<12.3f} {f1:<12.3f} {support:<10.0f}")
+            console.print(f"{cls:<15} {precision:<12.3f} {recall:<12.3f} {f1:<12.3f} {support:<10.0f}")
     
     # Print confusion matrix
     cm = metrics.get("confusion_matrix")
     if cm is not None and classes:
-        print("\nConfusion Matrix:")
-        print("                 Predicted")
+        console.print("\nConfusion Matrix:")
+        console.print("                 Predicted")
         # Print header
         header = "Actual           " + "  ".join([f"{cls[:8]:>8}" for cls in classes])
-        print(header)
+        console.print(header)
         # Print rows
         for i, cls in enumerate(classes):
             row = f"{cls[:15]:<15}  " + "  ".join([f"{cm[i][j]:>8}" for j in range(len(classes))])
-            print(row)
-    print("-" * 50)
+            console.print(row)
+    console.print("-" * 50)
 
 
 # Step 4: Define evaluation metric
@@ -333,13 +340,13 @@ def species_metric(
 def main():
     """Run the GEPA optimization for Palmer Penguins species classification."""
 
-    print("\n" + "=" * 70)
-    print("DATASET PREPARATION")
-    print("=" * 70)
+    console.print("\n" + "=" * 70)
+    console.print("DATASET PREPARATION")
+    console.print("=" * 70)
     
     # First, load the raw dataset to show original distribution before sampling
     # This helps users understand the baseline class distribution and sample size
-    print("\n📊 Loading Raw Palmer Penguins Dataset...")
+    console.print("\n📊 Loading Raw Palmer Penguins Dataset...")
     try:
         import seaborn as sns
         df_raw = sns.load_dataset("penguins")
@@ -362,28 +369,28 @@ def main():
         total_raw = len(df_clean)
         raw_species_counts = df_clean["species"].value_counts().sort_index()
         
-        print("\n📈 Raw Dataset (after removing missing values):")
-        print(f"   └─ Total Penguins: {total_raw}")
+        console.print("\n📈 Raw Dataset (after removing missing values):")
+        console.print(f"   └─ Total Penguins: {total_raw}")
         for species, count in raw_species_counts.items():
-            print(f"   └─ {species}: {count} ({count/total_raw:.1%})")
+            console.print(f"   └─ {species}: {count} ({count/total_raw:.1%})")
         
     except Exception as e:
-        print(f"   ⚠️  Could not load raw dataset: {e}")
+        console.print(f"   ⚠️  Could not load raw dataset: {e}")
     
-    print("\n" + "-" * 70)
+    console.print("\n" + "-" * 70)
 
     # Load the data with train/holdout split - now returns datasets directly
-    n_train = 15
-    n_holdout = 15
+    n_train = 10
+    n_holdout = 10
     train_dataset, holdout_dataset = load_penguins_data(n_train=n_train, n_holdout=n_holdout)
 
     # Calculate total dataset size
     total_samples = len(train_dataset) + len(holdout_dataset)
     
-    print(f"\n📊 Sampled Subset for This Run: {total_samples} penguins")
-    print(f"   └─ Training Pool: {len(train_dataset)} ({len(train_dataset)/total_samples:.1%})")
-    print(f"   └─ Holdout Test: {len(holdout_dataset)} ({len(holdout_dataset)/total_samples:.1%})")
-    print("   └─ Sampling Strategy: Stratified (maintains class balance)")
+    console.print(f"\n📊 Sampled Subset for This Run: {total_samples} penguins")
+    console.print(f"   └─ Training Pool: {len(train_dataset)} ({len(train_dataset)/total_samples:.1%})")
+    console.print(f"   └─ Holdout Test: {len(holdout_dataset)} ({len(holdout_dataset)/total_samples:.1%})")
+    console.print("   └─ Sampling Strategy: Stratified (maintains class balance)")
 
     # Show species statistics for training pool
     train_species_counts = {}
@@ -397,15 +404,15 @@ def main():
         label = data_inst.metadata.get("label")
         holdout_species_counts[label] = holdout_species_counts.get(label, 0) + 1
 
-    print("\n📈 Training Pool Class Distribution:")
+    console.print("\n📈 Training Pool Class Distribution:")
     for label in sorted(train_species_counts.keys()):
         count = train_species_counts[label]
-        print(f"   └─ {label}: {count} ({count/len(train_dataset):.1%})")
+        console.print(f"   └─ {label}: {count} ({count/len(train_dataset):.1%})")
     
-    print("\n📈 Holdout Test Class Distribution:")
+    console.print("\n📈 Holdout Test Class Distribution:")
     for label in sorted(holdout_species_counts.keys()):
         count = holdout_species_counts[label]
-        print(f"   └─ {label}: {count} ({count/len(holdout_dataset):.1%})")
+        console.print(f"   └─ {label}: {count} ({count/len(holdout_dataset):.1%})")
 
     # Split the training dataset into train/val using our helper
     train_ratio = 0.60
@@ -413,9 +420,9 @@ def main():
         train_dataset, train_ratio=train_ratio, shuffle=True, random_seed=1
     )
 
-    print(f"\n🔀 Training Pool Split (ratio={train_ratio}):")
-    print(f"   └─ Training Set: {len(trainset)} ({len(trainset)/len(train_dataset):.1%})")
-    print(f"   └─ Validation Set: {len(valset)} ({len(valset)/len(train_dataset):.1%})")
+    console.print(f"\n🔀 Training Pool Split (ratio={train_ratio}):")
+    console.print(f"   └─ Training Set: {len(trainset)} ({len(trainset)/len(train_dataset):.1%})")
+    console.print(f"   └─ Validation Set: {len(valset)} ({len(valset)/len(train_dataset):.1%})")
     
     # Calculate split class distributions
     train_split_counts = {}
@@ -428,22 +435,24 @@ def main():
         label = data_inst.metadata.get("label")
         val_split_counts[label] = val_split_counts.get(label, 0) + 1
     
-    print("\n   Training Set Distribution:")
+    console.print("\n   Training Set Distribution:")
     for label in sorted(train_split_counts.keys()):
         count = train_split_counts[label]
-        print(f"      └─ {label}: {count} ({count/len(trainset):.1%})")
+        console.print(f"      └─ {label}: {count} ({count/len(trainset):.1%})")
     
-    print("\n   Validation Set Distribution:")
+    console.print("\n   Validation Set Distribution:")
     for label in sorted(val_split_counts.keys()):
         count = val_split_counts[label]
-        print(f"      └─ {label}: {count} ({count/len(valset):.1%})")
+        console.print(f"      └─ {label}: {count} ({count/len(valset):.1%})")
     
-    print("=" * 70)
+    console.print("=" * 70)
     
 
     # Configure the optimization
-    reflection_model = "gpt-5-mini"
+    reflection_model = "gpt-4.1-mini"
     agent_model = "gpt-4.1-nano"
+    
+    logger = RichConsoleLogger(console=console)
 
     config = GepaConfig(
         # Agent configuration
@@ -473,40 +482,41 @@ def main():
         display_progress_bar=True,
         track_best_outputs=True,
         # Caching for faster iterations
-        enable_cache=True,
+        enable_cache=False,
         cache_dir=".gepa_cache",
         cache_verbose=True,
         # Output settings
         output_dir="optimization_results",
         save_result=True,
+        logger=logger,
     )
 
-    print("\n" + "=" * 70)
-    print("OPTIMIZATION CONFIGURATION")
-    print("=" * 70)
-    print("\n🎯 Task: Palmer Penguins Species Classification")
-    print("\n🤖 Models:")
-    print(f"   └─ Agent Model: {config.agent_model}")
-    print(f"   └─ Reflection Model: {config.reflection_model}")
-    print("\n📚 Dataset Configuration:")
-    print(f"   └─ Training Set: {len(config.trainset)} penguins")
-    print(f"   └─ Validation Set: {len(config.valset) if config.valset else 0} penguins")
-    print(f"   └─ Holdout Test: {len(holdout_dataset)} penguins (for final evaluation)")
-    print("\n⚙️  Optimization Settings:")
-    print(f"   └─ Max Full Evaluations: {config.max_full_evals}")
-    print(f"   └─ Max Metric Calls: {config.estimated_metric_calls}")
-    print(f"   └─ Module Selector: {config.module_selector}")
-    print(f"   └─ Candidate Selection: {config.candidate_selection_strategy}")
-    print(f"   └─ Optimize Tools: {config.optimize_tools}")
-    print(f"   └─ Use Merge: {config.use_merge}")
-    print(f"   └─ Cache Enabled: {config.enable_cache}")
-    print("=" * 70 + "\n")
+    console.print("\n" + "=" * 70)
+    console.print("OPTIMIZATION CONFIGURATION")
+    console.print("=" * 70)
+    console.print("\n🎯 Task: Palmer Penguins Species Classification")
+    console.print("\n🤖 Models:")
+    console.print(f"   └─ Agent Model: {config.agent_model}")
+    console.print(f"   └─ Reflection Model: {config.reflection_model}")
+    console.print("\n📚 Dataset Configuration:")
+    console.print(f"   └─ Training Set: {len(config.trainset)} penguins")
+    console.print(f"   └─ Validation Set: {len(config.valset) if config.valset else 0} penguins")
+    console.print(f"   └─ Holdout Test: {len(holdout_dataset)} penguins (for final evaluation)")
+    console.print("\n⚙️  Optimization Settings:")
+    console.print(f"   └─ Max Full Evaluations: {config.max_full_evals}")
+    console.print(f"   └─ Max Metric Calls: {config.estimated_metric_calls}")
+    console.print(f"   └─ Module Selector: {config.module_selector}")
+    console.print(f"   └─ Candidate Selection: {config.candidate_selection_strategy}")
+    console.print(f"   └─ Optimize Tools: {config.optimize_tools}")
+    console.print(f"   └─ Use Merge: {config.use_merge}")
+    console.print(f"   └─ Cache Enabled: {config.enable_cache}")
+    console.print("=" * 70 + "\n")
 
     # Run eval on holdout set using baseline agent
-    print("\n" + "=" * 70)
-    print("PRE-OPTIMIZATION BASELINE EVALUATION")
-    print("=" * 70)
-    print(f"\nEvaluating baseline agent on holdout set ({len(holdout_dataset)} penguins)...")
+    console.print("\n" + "=" * 70)
+    console.print("PRE-OPTIMIZATION BASELINE EVALUATION")
+    console.print("=" * 70)
+    console.print(f"\nEvaluating baseline agent on holdout set ({len(holdout_dataset)} penguins)...")
     baseline_correct_predictions = 0
     baseline_total_predictions = 0
     baseline_results_table = []
@@ -564,81 +574,93 @@ def main():
     baseline_metrics = calculate_classification_metrics(baseline_predictions, baseline_actuals)
     
     # Print baseline results
-    print("\n📋 Baseline Prediction Details:")
-    print("-" * 110)
-    print(
+    console.print("\n📋 Baseline Prediction Details:")
+    console.print("-" * 110)
+    console.print(
         f"{'#':<4} {'Island':<10} {'Sex':<7} {'Bill L':<8} {'Bill D':<8} {'Predicted':<12} {'Actual':<12} {'Conf':<6} {'Result':<8}"
     )
-    print("-" * 110)
+    console.print("-" * 110)
     for row in baseline_results_table:
         result_symbol = "✓" if row["correct"] else "✗"
-        print(
+        console.print(
             f"{row['case']:<4} {row['island']:<10} {row['sex']:<7} {row['bill_length']:<8.1f} {row['bill_depth']:<8.1f} "
             f"{row['predicted']:<12} {row['actual']:<12} {row['confidence']:<6.2f} {result_symbol:<8}"
         )
-    print("-" * 110)
+    console.print("-" * 110)
     baseline_accuracy = baseline_correct_predictions / baseline_total_predictions
-    print(
+    console.print(
         f"📊 BASELINE ACCURACY: {baseline_accuracy:.2%} ({baseline_correct_predictions}/{baseline_total_predictions})"
     )
-    print("-" * 110)
+    console.print("-" * 110)
     
     # Print detailed classification metrics
     print_classification_report(baseline_metrics, "📊 Baseline Classification Report")
-    print("=" * 70 + "\n")
+    console.print("=" * 70 + "\n")
 
     # Run the optimization
-    print("=" * 70)
-    print("RUNNING GEPA OPTIMIZATION")
-    print("=" * 70 + "\n")
+    console.print("=" * 70)
+    console.print("RUNNING GEPA OPTIMIZATION")
+    console.print("=" * 70 + "\n")
     
     result = run_optimization_pipeline(config)
 
     # Display results
-    print("\n" + "=" * 70)
-    print("OPTIMIZATION RESULTS")
-    print("=" * 70)
+    console.print("\n" + "=" * 70)
+    console.print("OPTIMIZATION RESULTS")
+    console.print("=" * 70)
     
-    print("\n📈 Performance Metrics:")
-    print(f"   └─ Best Validation Score: {result.best_score:.4f}")
+    console.print("\n📈 Performance Metrics:")
+    console.print(f"   └─ Best Validation Score: {result.best_score:.4f}")
     
     if result.original_score is not None:
-        print(f"   └─ Original Validation Score: {result.original_score:.4f}")
+        console.print(f"   └─ Original Validation Score: {result.original_score:.4f}")
         improvement = result.improvement_ratio()
         if improvement is not None:
             improvement_symbol = "📈" if improvement > 0 else "📉" if improvement < 0 else "➡️"
-            print(f"   └─ {improvement_symbol} Improvement: {improvement:+.2%}")
+            console.print(f"   └─ {improvement_symbol} Improvement: {improvement:+.2%}")
 
-    print("\n🔄 Optimization Statistics:")
-    print(f"   └─ Iterations Completed: {result.num_iterations}")
-    print(f"   └─ Metric Evaluations: {result.num_metric_calls}")
+    console.print("\n🔄 Optimization Statistics:")
+    console.print(f"   └─ Iterations Completed: {result.num_iterations}")
+    console.print(f"   └─ Metric Evaluations: {result.num_metric_calls}")
     
-    print("\n💰 GEPA Token Usage:")
-    print(f"   └─ Input Tokens: {result.gepa_usage.input_tokens:,}")
-    print(f"   └─ Output Tokens: {result.gepa_usage.output_tokens:,}")
-    print(f"   └─ Total Tokens: {result.gepa_usage.input_tokens + result.gepa_usage.output_tokens:,}")
-    print(f"   └─ API Calls: {result.gepa_usage.requests}")
+    console.print("\n💰 GEPA Token Usage:")
+    console.print(f"   └─ Input Tokens: {result.gepa_usage.input_tokens:,}")
+    console.print(f"   └─ Output Tokens: {result.gepa_usage.output_tokens:,}")
+    console.print(f"   └─ Total Tokens: {result.gepa_usage.input_tokens + result.gepa_usage.output_tokens:,}")
+    console.print(f"   └─ API Calls: {result.gepa_usage.requests}")
 
-    print("\n🔧 Optimized Components:")
+    console.print("\n" + "=" * 70)
+    console.print("🔧 Optimized Components")
+    console.print("=" * 70 + "\n")
+
     for component_name, component_value in result.best_candidate.items():
-        print(f"\n   {component_name}:")
-        # Indent the component value
-        for line in str(component_value).split('\n'):
-            print(f"      {line}")
+        # Create title matching RichConsoleLogger style
+        title_text = Text()
+        title_text.append(component_name, style="bold cyan")
+        
+        # Create panel with the same styling as proposal messages
+        panel = Panel(
+            str(component_value),
+            title=title_text,
+            border_style="bold cyan",
+            padding=(1, 2),
+        )
+        
+        console.print(panel)
 
-    print("\n" + "=" * 70)
+    console.print("\n" + "=" * 70)
 
     # Check if optimization made any improvements
     improvement = result.improvement_ratio()
     has_improvement = improvement is not None and improvement > 0
     
     if not has_improvement:
-        print("\n" + "=" * 70)
-        print("⚠️  NO IMPROVEMENT DETECTED")
-        print("=" * 70)
-        print("\nThe optimization did not find a better configuration than the baseline.")
-        print("Skipping holdout evaluation since the model has not changed.")
-        print("\nℹ️  The baseline holdout results above represent the final performance.")
+        console.print("\n" + "=" * 70)
+        console.print("⚠️  NO IMPROVEMENT DETECTED")
+        console.print("=" * 70)
+        console.print("\nThe optimization did not find a better configuration than the baseline.")
+        console.print("Skipping holdout evaluation since the model has not changed.")
+        console.print("\nℹ️  The baseline holdout results above represent the final performance.")
         
         # Use baseline metrics as the "optimized" metrics for the summary
         optimized_accuracy = baseline_accuracy
@@ -649,10 +671,10 @@ def main():
         
     else:
         # Test the optimized agent on holdout set
-        print("\n" + "=" * 70)
-        print("POST-OPTIMIZATION HOLDOUT EVALUATION")
-        print("=" * 70)
-        print(f"\nEvaluating optimized agent on holdout test set ({len(holdout_dataset)} penguins)...")
+        console.print("\n" + "=" * 70)
+        console.print("POST-OPTIMIZATION HOLDOUT EVALUATION")
+        console.print("=" * 70)
+        console.print(f"\nEvaluating optimized agent on holdout test set ({len(holdout_dataset)} penguins)...")
 
         # Create and configure agent
         test_agent = Agent(
@@ -714,7 +736,7 @@ def main():
                     )
 
                 except Exception as e:
-                    print(f"\n⚠️  Error on test case {i}: {e}")
+                    console.print(f"\n⚠️  Error on test case {i}: {e}")
                     results_table.append(
                         {
                             "case": i,
@@ -740,26 +762,26 @@ def main():
             optimized_metrics = calculate_classification_metrics(optimized_predictions, optimized_actuals)
         
         # Print results table
-        print("\n📋 Optimized Agent Prediction Details:")
+        console.print("\n📋 Optimized Agent Prediction Details:")
         print("-" * 110)
-        print(
+        console.print(
             f"{'#':<4} {'Island':<10} {'Sex':<7} {'Bill L':<8} {'Bill D':<8} {'Predicted':<12} {'Actual':<12} {'Conf':<6} {'Result':<8}"
         )
-        print("-" * 110)
+        console.print("-" * 110)
 
         for row in results_table:
             result_symbol = "✓" if row["correct"] else "✗"
-            print(
+            console.print(
                 f"{row['case']:<4} {row['island']:<10} {row['sex']:<7} {row['bill_length']:<8.1f} {row['bill_depth']:<8.1f} "
                 f"{row['predicted']:<12} {row['actual']:<12} {row['confidence']:<6.2f} {result_symbol:<8}"
             )
 
-        print("-" * 110)
+        console.print("-" * 110)
 
         # Calculate and display accuracy
         if total_predictions > 0:
             optimized_accuracy = correct_predictions / total_predictions
-            print(
+            console.print(
                 f"📊 OPTIMIZED ACCURACY: {optimized_accuracy:.2%} ({correct_predictions}/{total_predictions})"
             )
             
@@ -767,7 +789,7 @@ def main():
             if baseline_total_predictions > 0:
                 accuracy_improvement = optimized_accuracy - baseline_accuracy
                 improvement_symbol = "📈" if accuracy_improvement > 0 else "📉" if accuracy_improvement < 0 else "➡️"
-                print(
+                console.print(
                     f"{improvement_symbol} IMPROVEMENT vs BASELINE: {accuracy_improvement:+.2%} "
                     f"({baseline_accuracy:.2%} → {optimized_accuracy:.2%})"
                 )
@@ -779,44 +801,44 @@ def main():
             print_classification_report(optimized_metrics, "📊 Optimized Classification Report")
 
     # Show a few detailed examples
-    print("\n" + "=" * 70)
+    console.print("\n" + "=" * 70)
     if has_improvement:
-        print("SAMPLE DETAILED PREDICTIONS - OPTIMIZED (First 5 Cases)")
+        console.print("SAMPLE DETAILED PREDICTIONS - OPTIMIZED (First 5 Cases)")
     else:
-        print("SAMPLE DETAILED PREDICTIONS - BASELINE (First 5 Cases)")
-    print("=" * 70)
+        console.print("SAMPLE DETAILED PREDICTIONS - BASELINE (First 5 Cases)")
+    console.print("=" * 70)
 
     for i, row in enumerate(results_table[:5], 1):  # Show first 5
         result_symbol = "✓ CORRECT" if row["correct"] else "✗ INCORRECT"
-        print(f"\n--- Case {row['case']} ({result_symbol}) ---")
-        print(
+        console.print(f"\n--- Case {row['case']} ({result_symbol}) ---")
+        console.print(
             f"Penguin: {row['island']} island, {row['sex']}, "
             f"bill {row['bill_length']:.1f}mm x {row['bill_depth']:.1f}mm, "
             f"flipper {row['flipper_length']:.0f}mm, {row['body_mass']:.0f}g"
         )
-        print(
+        console.print(
             f"Predicted: {row['predicted'].upper()} (confidence: {row['confidence']:.2%})"
         )
-        print(f"Actual: {row['actual'].upper()}")
-        print(
+        console.print(f"Actual: {row['actual'].upper()}")
+        console.print(
             f"Reasoning: {row['reasoning'][:150]}..."
             if len(row["reasoning"]) > 150
             else f"Reasoning: {row['reasoning']}"
         )
 
     # Print final summary
-    print("\n" + "=" * 70)
-    print("FINAL SUMMARY")
-    print("=" * 70)
-    print("\n📊 Dataset Configuration:")
-    print(f"   └─ Total Samples: {total_samples}")
-    print(f"   └─ Training: {len(trainset)} | Validation: {len(valset)} | Holdout: {len(holdout_dataset)}")
+    console.print("\n" + "=" * 70)
+    console.print("FINAL SUMMARY")
+    console.print("=" * 70)
+    console.print("\n📊 Dataset Configuration:")
+    console.print(f"   └─ Total Samples: {total_samples}")
+    console.print(f"   └─ Training: {len(trainset)} | Validation: {len(valset)} | Holdout: {len(holdout_dataset)}")
     
     if has_improvement:
-        print("\n📈 Performance Comparison (Holdout Test Set):")
-        print(f"   {'Metric':<25} {'Baseline':<15} {'Optimized':<15} {'Improvement':<15}")
-        print(f"   {'-'*70}")
-        print(f"   {'Accuracy':<25} {baseline_accuracy:<15.3f} {optimized_accuracy:<15.3f} {accuracy_improvement:+.3f}")
+        console.print("\n📈 Performance Comparison (Holdout Test Set):")
+        console.print(f"   {'Metric':<25} {'Baseline':<15} {'Optimized':<15} {'Improvement':<15}")
+        console.print(f"   {'-'*70}")
+        console.print(f"   {'Accuracy':<25} {baseline_accuracy:<15.3f} {optimized_accuracy:<15.3f} {accuracy_improvement:+.3f}")
         
         if optimized_predictions:
             # Show comparison between baseline and optimized
@@ -824,29 +846,34 @@ def main():
             precision_improvement = optimized_metrics['precision_macro'] - baseline_metrics['precision_macro']
             recall_improvement = optimized_metrics['recall_macro'] - baseline_metrics['recall_macro']
             
-            print(f"   {'Precision (Macro)':<25} {baseline_metrics['precision_macro']:<15.3f} {optimized_metrics['precision_macro']:<15.3f} {precision_improvement:+.3f}")
-            print(f"   {'Recall (Macro)':<25} {baseline_metrics['recall_macro']:<15.3f} {optimized_metrics['recall_macro']:<15.3f} {recall_improvement:+.3f}")
-            print(f"   {'F1-Score (Macro)':<25} {baseline_metrics['f1_macro']:<15.3f} {optimized_metrics['f1_macro']:<15.3f} {f1_improvement:+.3f}")
+            console.print(f"   {'Precision (Macro)':<25} {baseline_metrics['precision_macro']:<15.3f} {optimized_metrics['precision_macro']:<15.3f} {precision_improvement:+.3f}")
+            console.print(f"   {'Recall (Macro)':<25} {baseline_metrics['recall_macro']:<15.3f} {optimized_metrics['recall_macro']:<15.3f} {recall_improvement:+.3f}")
+            console.print(f"   {'F1-Score (Macro)':<25} {baseline_metrics['f1_macro']:<15.3f} {optimized_metrics['f1_macro']:<15.3f} {f1_improvement:+.3f}")
     else:
-        print("\n📈 Performance (Holdout Test Set - No Improvement):")
-        print(f"   {'Metric':<25} {'Value':<15}")
-        print(f"   {'-'*40}")
-        print(f"   {'Accuracy':<25} {baseline_accuracy:<15.3f}")
+        console.print("\n📈 Performance (Holdout Test Set - No Improvement):")
+        console.print(f"   {'Metric':<25} {'Value':<15}")
+        console.print(f"   {'-'*40}")
+        console.print(f"   {'Accuracy':<25} {baseline_accuracy:<15.3f}")
         
         if optimized_predictions:
             # Show only baseline metrics (no comparison)
-            print(f"   {'Precision (Macro)':<25} {baseline_metrics['precision_macro']:<15.3f}")
-            print(f"   {'Recall (Macro)':<25} {baseline_metrics['recall_macro']:<15.3f}")
-            print(f"   {'F1-Score (Macro)':<25} {baseline_metrics['f1_macro']:<15.3f}")
+            console.print(f"   {'Precision (Macro)':<25} {baseline_metrics['precision_macro']:<15.3f}")
+            console.print(f"   {'Recall (Macro)':<25} {baseline_metrics['recall_macro']:<15.3f}")
+            console.print(f"   {'F1-Score (Macro)':<25} {baseline_metrics['f1_macro']:<15.3f}")
     
-    print("\n💰 Optimization Cost:")
-    print(f"   └─ Total Tokens: {result.gepa_usage.input_tokens + result.gepa_usage.output_tokens:,}")
-    print(f"   └─ API Calls: {result.gepa_usage.requests}")
-    print(f"   └─ Iterations: {result.num_iterations}")
+    console.print("\n💰 Optimization Cost:")
+    console.print(f"   └─ Total Tokens: {result.gepa_usage.input_tokens + result.gepa_usage.output_tokens:,}")
+    console.print(f"   └─ API Calls: {result.gepa_usage.requests}")
+    console.print(f"   └─ Iterations: {result.num_iterations}")
     
-    print("\n" + "=" * 70)
-    print("✅ EXAMPLE COMPLETE!")
-    print("=" * 70 + "\n")
+    console.print("\n🔍 Optimization DAG:")
+    dag_string = result.graphviz_dag
+    
+    logger.render_optimization_dag(dag_string, copy_to_clipboard=True)
+    
+    console.print("\n" + "=" * 70)
+    console.print("✅ EXAMPLE COMPLETE!")
+    console.print("=" * 70 + "\n")
 
     return result
 
