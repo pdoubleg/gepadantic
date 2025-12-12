@@ -91,7 +91,7 @@ with result.apply_best(agent):
     optimized_result = await agent.run_signature(TaskInput(text="Amazing product!"))
 ```
 
-## Core Concepts
+## Core Components
 
 | Component | Description |
 |-----------|-------------|

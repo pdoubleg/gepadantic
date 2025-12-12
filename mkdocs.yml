@@ -57,16 +57,22 @@ markdown_extensions:
   - attr_list
   - md_in_html
   - tables
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
 
 nav:
   - Home: index.md
-  - Core Concepts:
-      - core-concepts/index.md
-      - Scaffold: core-concepts/scaffold.md
-      - SignatureAgent: core-concepts/signature-agent.md
-      - Adapter: core-concepts/adapter.md
-      - Runner: core-concepts/runner.md
-      - Data Utils: core-concepts/data-utils.md
+  - About GEPA: about-gepa.md
+  - Core Components:
+      - core-components/index.md
+      - Scaffold: core-components/scaffold.md
+      - SignatureAgent: core-components/signature-agent.md
+      - Data Utils: core-components/data-utils.md
+      - Adapter: core-components/adapter.md
+      - Runner: core-components/runner.md
   - User Guides:
       - Getting Started: user-guides/getting-started.md
   - API Reference: api/index.md
