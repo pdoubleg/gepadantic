@@ -1,0 +1,41 @@
+{
+  "best_candidate": {
+    "instructions": "Generate a concise, clinically focused medical chronology entry from a single full-text medical document that includes clinical history, exam findings, diagnostic study results, assessment, plan, and billing information. Emphasize exact dates in YYYY-MM-DD format, provider full name and credentials, diagnoses including anatomical and neurological details (e.g., cervical strain, C6 radiculopathy), treatments like medications, injections (including spinal levels and procedure types), therapies, and functional status or work limitations. Extract key clinical findings such as pain levels, radicular symptoms, clinical scores, imaging study dates and pertinent impressions, and patient-reported functional abilities verbatim where specified (e.g., ability to lift a 4-year-old child with only mild discomfort). Avoid unnecessary personal identifiers beyond city and state if relevant and exclude detailed billing data unless essential. Use bullet points for clarity when listing multiple items. Maintain professional, clear, and precise medical language without narrative synthesis or generalization to preserve factual accuracy.",
+    "tool:final_result:description": "Summarize the medical document with a focus on concise clinical chronology including: date of service, full provider name with credentials, diagnosis with domain-specific terms such as cervical strain, C6 radiculopathy, spinal levels (e.g., C5\u2013C6), clinical findings (range of motion degrees, Spurling test results), patient subjective pain ratings (with scales), documented radicular symptoms, imaging and procedures with exact dates and results, treatment details including manual therapy, therapeutic exercises, epidural steroid injections (noting guidance and level), patient consent as documented, and follow-up plan. Include verbatim patient-reported functional limitations or abilities when provided (e.g., lifting a child with mild discomfort). Exclude detailed administrative or billing information unless directly relevant. Organize information using bullet points for easy reading.",
+    "tool:final_result:param:date_of_service": "Extract the exact date of service representing the date of the clinical encounter or procedure from the document. Use the format YYYY-MM-DD. Confirm this date is specifically the date linked to the main clinical encounter or intervention described in the document (e.g., physical therapy visit date, procedure date, or discharge date if clearly indicated). Avoid selecting unrelated or signature dates.",
+    "tool:final_result:param:provider_name": "Extract the primary provider's full name and professional credentials as appearing in the clinical note or billing section. Prefer the signer or therapist for physical therapy notes. Include full degrees and licensure details if present (e.g., PT, DPT). Omit organization names or titles unless part of the provider's name.",
+    "tool:final_result:param:description": "Provide a precise medical chronology entry summarizing key clinical details with exact dates and provider info. Include clinical presentation, diagnosis, relevant examination findings (including pain severity, range of motion with degrees, neurological tests such as Spurling test and their findings), imaging and other diagnostic results with dates and interpretations, treatments administered (manual therapy, therapeutic exercise, epidural steroid injections noting spinal level and procedure characteristics), patient-reported functional status (e.g., ability to resume work, lifting ability), and the plan including discharge or follow-up instructions. Use bullet points where multiple items are present. Do not include narrative synthesis or generalization; quote patient statements verbatim when specified.",
+    "signature:MedicalRecordInput:instructions": "Input a full-text single medical document containing clinical history, exam findings, diagnostic study results, assessment, plan, and billing information. Extract and summarize key clinical information for a medical chronology entry emphasizing exact dates, provider full name and credentials, diagnoses, treatments including procedural and anatomical specifics, clinical findings, and follow-up plans. Minimize personal identifiers and administrative details unless essential. Use professional medical language and bullet points for clarity.",
+    "signature:MedicalRecordInput:text:desc": "Single full-text medical document including clinical notes, diagnostic imaging reports, assessments, and plan relevant to patient's care episode, providing clinical history, exam findings, diagnostic results, assessment, treatment plan, and billing. Extract precise dates, provider name with credentials, diagnoses including domain-specific terms, clinical findings like ROM measures and clinical test outcomes, reported pain levels, treatments such as injections with level and guidance details, therapies, medications, functional limitations or status reported by patient, and follow-up directives. Avoid unnecessary patient identifiers beyond city/state if essential. Use bullet points for lists and professional language."
+  },
+  "best_score": 0.8533333333333333,
+  "original_candidate": {
+    "instructions": "Generate a medical chronology entry from the given text.",
+    "tool:final_result:description": "A single entry in the medical chronology.",
+    "tool:final_result:param:date_of_service": "Date of service",
+    "tool:final_result:param:provider_name": "Name of the provider",
+    "tool:final_result:param:description": "Description entry for a chronology",
+    "signature:MedicalRecordInput:instructions": "A single medical document with associated metadata.",
+    "signature:MedicalRecordInput:text:desc": "Full text of the medical document"
+  },
+  "original_score": 0.8333333333333334,
+  "num_iterations": 7,
+  "num_metric_calls": 101,
+  "gepa_usage": {
+    "input_tokens": 754142,
+    "cache_write_tokens": 0,
+    "cache_read_tokens": 0,
+    "output_tokens": 32875,
+    "input_audio_tokens": 0,
+    "cache_audio_read_tokens": 0,
+    "output_audio_tokens": 0,
+    "details": {
+      "accepted_prediction_tokens": 0,
+      "audio_tokens": 0,
+      "reasoning_tokens": 0,
+      "rejected_prediction_tokens": 0
+    },
+    "requests": 112,
+    "tool_calls": 0
+  }
+}

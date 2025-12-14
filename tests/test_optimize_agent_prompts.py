@@ -72,6 +72,10 @@ def test_optimize_agent_prompts_minimal_flow():
             "You are a concise classifier. Output exactly one of: positive, negative, neutral."
         ),
     )
+    signature_agent = SignatureAgent(
+        agent,
+        input_type=BaseModel,
+    )
 
     seed = extract_seed_candidate(agent)
 
@@ -99,7 +103,7 @@ def test_optimize_agent_prompts_minimal_flow():
 
     # Keep the budget low; use TestModel() for the reflection model to exercise the full path
     result = optimize_agent_prompts(
-        agent=agent,
+        signature_agent=signature_agent,
         trainset=trainset,
         metric=metric,
         reflection_model=reflection_model,
@@ -194,7 +198,7 @@ def test_optimize_agent_prompts_minimal_flow_with_signature():
 
     # Keep the budget low; use TestModel() for the reflection model to exercise the full path
     result = optimize_agent_prompts(
-        agent=signature_agent,
+        signature_agent=signature_agent,
         trainset=trainset,
         input_type=Input,
         metric=metric,

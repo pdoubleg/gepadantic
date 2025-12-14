@@ -15,6 +15,7 @@ from gepa.proposer.reflective_mutation.base import (
     ReflectionComponentSelector,
 )
 from gepa.utils import StopperProtocol
+from gepadantic.signature_agent import SignatureAgent
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic_ai import usage as _usage
 
@@ -26,7 +27,6 @@ from .components import (
     extract_seed_candidate_with_signature,
     normalize_component_text,
 )
-from .lm import GEPALanguageModel
 from .signature import InputSpec
 from .schema import DataInst, RolloutOutput
 
@@ -35,9 +35,6 @@ DataInstT = TypeVar("DataInstT", bound=DataInst)
 
 if TYPE_CHECKING:
     from pydantic_ai.agent import AbstractAgent
-
-    from .lm import GEPALanguageModel
-
 
 AUTO_RUN_SETTINGS = {
     "light": {"n": 6},
@@ -255,7 +252,7 @@ class GepaOptimizationResult(BaseModel):
 
 
 def optimize_agent_prompts(
-    agent: AbstractAgent[Any, Any],
+    signature_agent: SignatureAgent[Any, Any],
     trainset: Sequence[DataInstT],
     *,
     metric: Callable[[DataInstT, RolloutOutput[Any]], tuple[float, str | None]],
@@ -306,60 +303,44 @@ def optimize_agent_prompts(
     agent and a dataset, and returns optimized prompts.
 
     Args:
-        agent: The pydantic-ai agent to optimize.
+        signature_agent: The SignatureAgent to optimize.
         trainset: Training dataset (pydantic-evals Dataset or list of DataInst).
         metric: Function that computes (score, feedback) for each instance.
-                The feedback (second element of tuple) is optional but recommended.
-                If provided, it will be used to guide the optimization process.
+            The feedback (second element of tuple) is optional but recommended.
+            If provided, it will be used to guide the optimization process.
         valset: Optional validation dataset. If not provided, trainset is used.
         input_type: Optional structured input specification whose instructions and
             field descriptions should be optimized alongside the agent's prompts.
-
-        # Reflection-based configuration
-        reflection_model: Model name to use for reflection (proposing new prompts).
-        candidate_selection_strategy: Strategy for selecting candidates ('pareto' or 'current_best').
-        skip_perfect_score: Whether to skip updating if perfect score achieved on minibatch.
-        reflection_minibatch_size: Number of examples to use for reflection in each proposal.
-        perfect_score: The perfect score value to achieve (integer).
-
-        # Component selection configuration
-        module_selector: Component selection strategy. Can be a ReflectionComponentSelector
-                        instance or a string ('round_robin', 'all').
-
-        # Merge-based configuration
-        use_merge: Whether to use the merge strategy for combining candidates.
-        max_merge_invocations: Maximum number of merge invocations to perform.
-        merge_val_overlap_floor: Minimum number of validation examples to overlap between merge candidates.
-
-        # Budget
+        seed_candidate: Optional seed candidate to start optimization from. If None, it will be inferred.
         max_metric_calls: Maximum number of metric evaluations (budget).
         max_full_evals: Maximum number of full evaluations (budget).
         auto: Automatically set the budget based on the dataset size. Can be 'light', 'medium', or 'heavy'.
-
-        # Caching configuration
+        reflection_model: Model name to use for reflection (proposing new prompts).
+        candidate_selection_strategy: Strategy for selecting candidates ('pareto', 'current_best', or 'epsilon_greedy').
+        skip_perfect_score: Whether to skip updating if perfect score achieved on minibatch.
+        reflection_minibatch_size: Number of examples to use for reflection in each proposal.
+        perfect_score: The perfect score value to achieve (integer).
+        module_selector: Component selection strategy. Can be a ReflectionComponentSelector
+            instance or a string ('round_robin', 'all').
+        use_merge: Whether to use the merge strategy for combining candidates.
+        max_merge_invocations: Maximum number of merge invocations to perform.
+        merge_val_overlap_floor: Minimum number of validation examples to overlap between merge candidates.
+        stop_callbacks: Optional stopper protocol or sequence of stoppers to control when optimization should halt.
         enable_cache: Whether to enable caching of metric results for resumable runs.
         cache_dir: Directory to store cache files. If None, uses '.gepa_cache' in current directory.
         cache_verbose: Whether to log cache hits and misses.
-
-        # Logging
-        track_best_outputs: Whether to track best outputs on validation set.
         logger: LoggerProtocol instance for tracking progress.
         run_dir: Directory to save results to.
-        display_progress_bar: Whether to display a progress bar.
-        
-        # MLFlow
         use_mlflow: Whether to use MLflow for logging.
         mlflow_tracking_uri: Tracking URI for MLflow.
         mlflow_experiment_name: Experiment name for MLflow.
-
-        # Reproducibility
+        track_best_outputs: Whether to track best outputs on validation set.
+        display_progress_bar: Whether to display a progress bar.
         seed: Random seed for reproducibility.
         raise_on_exception: Whether to raise exceptions or continue on errors.
-
-        # Reflection sampler
         reflection_sampler: Optional sampler for reflection records. If provided,
-                               it will be called to sample records when needed. If None,
-                               all reflection records are kept without sampling.
+            it will be called to sample records when needed. If None,
+            all reflection records are kept without sampling.
 
     Returns:
         GepaOptimizationResult with the best candidate and metadata.
@@ -383,7 +364,7 @@ def optimize_agent_prompts(
     # Extract seed candidate from agent and optional signature
     extracted_seed_candidate = _normalize_candidate(
         extract_seed_candidate_with_signature(
-            agent=agent,
+            agent=signature_agent,
             input_type=input_type,
         )
     )
@@ -420,22 +401,20 @@ def optimize_agent_prompts(
             enabled=True,
             verbose=cache_verbose,
         )
+        
+    # If no reflection model is provided, use the agent's model
+    if not reflection_model:
+        reflection_model = signature_agent.wrapped.model.model_name
 
     # Create adapter
     adapter = PydanticAIGEPAAdapter(
-        agent=agent,
+        agent=signature_agent,
         metric=metric,
         input_type=input_type,
         reflection_sampler=reflection_sampler,
         reflection_model=reflection_model,
         cache_manager=cache_manager,
     )
-    # If no reflection model is provided, use the agent's model
-    if not reflection_model:
-        reflection_model = agent.model.model_name
-
-    # Create a default language model for GEPA reflection
-    reflection_lm = GEPALanguageModel(reflection_model)
 
     # Adjust module_selector based on number of components if needed
     # If only one component and module_selector is still default, use 'all'
@@ -451,7 +430,6 @@ def optimize_agent_prompts(
         # Budget
         max_metric_calls=max_metric_calls,
         # Reflection-based configuration
-        reflection_lm=reflection_lm,
         candidate_selection_strategy=candidate_selection_strategy,
         reflection_minibatch_size=reflection_minibatch_size,
         perfect_score=perfect_score,

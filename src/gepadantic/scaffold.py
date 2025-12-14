@@ -44,64 +44,6 @@ class GepaConfig:
     This class captures all parameters needed to run GEPA optimization,
     providing a single point of entry for optimization runs.
 
-    GEPA is an evolutionary optimizer that evolves (multiple) text components of a 
-    complex system to optimize them towards a given metric. GEPA can also leverage 
-    rich textual feedback obtained from the system's execution environment, evaluation,
-    and the system's own execution traces to iteratively improve the system's performance.
-
-    ## Concepts
-
-    - **System**: A harness that uses text components to perform a task. Each text 
-      component of the system to be optimized is a named component of the system.
-    - **Candidate**: A mapping from component names to component text. A concrete 
-      instantiation of the system is realized by setting the text of each system 
-      component to the text provided by the candidate mapping.
-    - **DataInst**: An (uninterpreted) data type over which the system operates.
-    - **RolloutOutput**: The output of the system on a DataInst.
-
-    Each execution of the system produces a RolloutOutput, which can be evaluated to 
-    produce a score. The execution of the system also produces a trajectory, which 
-    consists of the operations performed by different components of the system, 
-    including the text of the components that were executed.
-
-    ## Adapter Implementation
-
-    Here we use a custom PydanticAIGEPAAdapter that plugs into the canonical GEPA 
-    optimization API. The adapter is responsible for:
-
-    1. **Evaluating a proposed candidate on a batch of inputs**:
-        * The adapter receives a candidate proposed by GEPA, along with a batch of 
-            inputs selected from the training/validation set.
-        * The adapter instantiates the system with the texts proposed in the candidate.
-        * The adapter then evaluates the candidate on the batch of inputs, and returns 
-            the scores.
-        * The adapter should also capture relevant information from the execution of 
-            the candidate, like system and evaluation traces.
-
-    2. **Identifying textual information relevant to a component of the candidate**:
-        * Given the trajectories captured during the execution of the candidate, GEPA 
-            selects a component of the candidate to update.
-        * The adapter receives the candidate, the batch of inputs, and the trajectories 
-            captured during the execution of the candidate.
-        * The adapter is responsible for identifying the textual information relevant 
-            to the component to update.
-        * This information is used by GEPA to reflect on the performance of the 
-            component, and propose new component texts.
-
-    ## Optimization Strategies
-
-    At each iteration, GEPA proposes a new candidate using one of the following strategies:
-
-    1. **Reflective mutation**: GEPA proposes a new candidate by mutating the current 
-       candidate, leveraging rich textual feedback.
-    2. **Merge**: GEPA proposes a new candidate by merging 2 candidates that are on 
-       the Pareto frontier.
-
-    GEPA also tracks the Pareto frontier of performance achieved by different candidates 
-    on the validation set. This way, it can leverage candidates that work well on a 
-    subset of inputs to improve the system's performance on the entire validation set, 
-    by evolving from the Pareto frontier.
-
     Example:
         ```python
         from pydantic import BaseModel, Field
@@ -152,7 +94,7 @@ class GepaConfig:
     """Function that evaluates agent outputs, returning (score, feedback)."""
 
     # Core agent configuration
-    agent: SignatureAgent[Any, Any] | None = None
+    signature_agent: SignatureAgent[Any, Any] | None = None
     """The pre-configured SignatureAgent to optimize. Can be provided instead of agent_model. Useful for complex agents, e.g. with tools, mcp servers, etc."""
 
     agent_model: str | None = None
@@ -282,9 +224,9 @@ class GepaConfig:
             f"auto={self.auto}."
         )
         # Validate that exactly one of agent or agent_model is set
-        assert (self.agent is not None) + (self.agent_model is not None) == 1, (
-            "Exactly one of agent or agent_model must be set. "
-            f"You set agent={self.agent}, "
+        assert (self.signature_agent is not None) + (self.agent_model is not None) == 1, (
+            "Exactly one of signature_agent or agent_model must be set. "
+            f"You set signature_agent={self.signature_agent}, "
             f"agent_model={self.agent_model}."
         )
         if self.logger is None:
@@ -349,28 +291,25 @@ def run_optimization_pipeline(config: GepaConfig) -> GepaOptimizationResult:
         )
 
     # Create the base agent
-    if config.agent is None:
+    if config.signature_agent is None:
         model = get_openai_model(config.agent_model)
         agent = Agent(
             model=model,
             instructions=config.agent_instructions,
             output_type=config.output_type,
         )
-    else:
-        agent = config.agent
-
-    # Wrap with SignatureAgent for structured input support (if not already wrapped)
-    if not isinstance(agent, SignatureAgent):
         signature_agent = SignatureAgent(
             agent,
             input_type=config.input_type,
             optimize_tools=config.optimize_tools,
         )
+    else:
+        signature_agent = config.signature_agent
 
     # Run optimization
     print("Starting GEPA optimization...")
     result = optimize_agent_prompts(
-        agent=signature_agent,
+        signature_agent=signature_agent,
         seed_candidate=config.seed_candidate,
         trainset=trainset,
         valset=valset,

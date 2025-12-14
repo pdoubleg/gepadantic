@@ -13,12 +13,12 @@ def get_openai_model(model_name: str) -> Model:
     return model
 
 
-class GEPALanguageModel:
-    """Simple LanguageModel wrapper using a pydantic-ai Agent returning text."""
+# class GEPALanguageModel:
+#     """Simple LanguageModel wrapper using a pydantic-ai Agent returning text."""
 
-    def __init__(self, model: str | None):
-        self._agent = Agent(get_openai_model(model), output_type=str)
+#     def __init__(self, model: str | None):
+#         self._agent = Agent(get_openai_model(model), output_type=str)
 
-    def __call__(self, prompt: str) -> str:
-        result = self._agent.run_sync(prompt)
-        return result.output
+#     def __call__(self, prompt: str) -> str:
+#         result = self._agent.run_sync(prompt)
+#         return result.output

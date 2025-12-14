@@ -306,5 +306,5 @@ config = GepaConfig(
 1. **Start with good baseline prompts**: GEPA optimization will evolve the initial seed prompt
 2. **Provide detailed feedback**: The quality of metric feedback directly impacts optimization
 3. **Use validation sets**: They help prevent overfitting to training data
-4. **Monitor token usage**: Use `config.estimated_metric_calls` before kicking off runs to see the expected usage. Use `max_metric_calls` to set an explicit cap. For advanced usage limits see pydantic-ai [`UsageLimits`](max_metric_calls)
+4. **Monitor token usage**: Use `config.estimated_metric_calls` before kicking off runs to see the expected usage. Use `max_metric_calls` to set an explicit cap. For advanced usage limits see pydantic-ai [UsageLimits](https://ai.pydantic.dev/api/models/#pydantic_ai.models.UsageLimits)
 5. **Experiment with batch sizes**: Balance between cost and quality. For example, changing the default `reflection_minibatch_size` for greater batch diversity.

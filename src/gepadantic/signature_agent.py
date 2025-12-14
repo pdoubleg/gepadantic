@@ -94,7 +94,7 @@ class SignatureAgent(WrapperAgent[AgentDepsT, OutputDataT]):
         output_type: OutputSpec[OutputDataT] | type[OutputDataT] | None = None,
         *,
         append_instructions: bool = True,
-        optimize_tools: bool = False,
+        optimize_tools: bool = True,
     ):
         """Initialize the SignatureAgent wrapper.
 

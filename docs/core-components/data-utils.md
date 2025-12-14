@@ -317,22 +317,6 @@ def accuracy_metric(
     
     return 1.0 if prediction == ground_truth else 0.0
 
-# 6. Use with optimizer
-# from gepadantic import GepaAgent
-# 
-# agent = GepaAgent(
-#     result_type=SentimentOutput,
-#     # ... other config ...
-# )
-# 
-# optimized_agent = agent.optimize(
-#     trainset=trainset,
-#     valset=valset,
-#     metric=accuracy_metric,
-#     num_candidates=5,
-#     max_iterations=3
-# )
-```
 
 ## Key Takeaways
 
@@ -345,5 +329,6 @@ def accuracy_metric(
 ## See Also
 
 - [Getting Started](../user-guides/getting-started.md)
-- [Optimization Guide](../user-guides/optimization.md)
+- [GEPA Tutorial](../user-guides/dspy_tutorial.ipynb)
+- [Medical Chronology Example](../user-guides/medical_chronology.ipynb)
 - [API Reference](../api/index.md)

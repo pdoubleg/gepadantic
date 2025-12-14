@@ -26,7 +26,6 @@ from .signature import (
 from .signature_agent import SignatureAgent
 from .schema import DataInst, RolloutOutput, Trajectory, OutputT
 from .components import apply_candidate_to_signature_model, apply_candidate_to_tool_model
-from .lm import GEPALanguageModel, get_openai_model
 from .loggers import RichConsoleLogger
 
 __all__ = [
@@ -65,7 +64,6 @@ __all__ = [
     "SignatureAgent",
     "apply_candidate_to_signature_model",
     "apply_candidate_to_tool_model",
-    "GEPALanguageModel",
     "get_openai_model",
     # Logging
     "RichConsoleLogger",

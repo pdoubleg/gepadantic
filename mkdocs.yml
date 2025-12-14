@@ -31,6 +31,10 @@ theme:
 
 plugins:
   - search
+  - mkdocs-jupyter:
+      include_source: true
+      execute: false
+      allow_errors: false
   - mkdocstrings:
       handlers:
         python:
@@ -75,4 +79,6 @@ nav:
       - Runner: core-components/runner.md
   - User Guides:
       - Getting Started: user-guides/getting-started.md
+      - GEPA Tutorial: user-guides/dspy_tutorial.ipynb
+      - Medical Chronology: user-guides/medical_chronology.ipynb
   - API Reference: api/index.md

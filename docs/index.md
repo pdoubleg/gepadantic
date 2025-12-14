@@ -95,11 +95,11 @@ with result.apply_best(agent):
 
 | Component | Description |
 |-----------|-------------|
-| [SignatureAgent](core-concepts/signature-agent.md) | Adds `input_type` to pydantic-ai agents, enabling structured inputs with field descriptions that GEPA can optimize. |
-| [Adapter](core-concepts/adapter.md) | Bridges pydantic-ai agents with GEPA's optimization API, handling evaluation, trajectory capture, and reflection. |
-| [Runner](core-concepts/runner.md) | Orchestrates the GEPA optimization pipeline through iterative prompt evolution. |
-| [Scaffold](core-concepts/scaffold.md) | Config-based convenience wrapper for simplified setup and execution. |
-| [Data Utils](core-concepts/data-utils.md) | Helpers to convert common data formats into GEPA-compatible datasets. |
+| [SignatureAgent](core-components/signature-agent.md) | Adds `input_type` to pydantic-ai agents, enabling structured inputs with field descriptions that GEPA can optimize. |
+| [Adapter](core-components/adapter.md) | Bridges pydantic-ai agents with GEPA's optimization API, handling evaluation, trajectory capture, and reflection. |
+| [Runner](core-components/runner.md) | Orchestrates the GEPA optimization pipeline through iterative prompt evolution. |
+| [Scaffold](core-components/scaffold.md) | Config-based convenience wrapper for simplified setup and execution. |
+| [Data Utils](core-components/data-utils.md) | Helpers to convert common data formats into GEPA-compatible datasets. |
 
 ## Example Results
 

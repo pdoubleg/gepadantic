@@ -13,6 +13,7 @@ from gepadantic.cache import CacheManager, create_cached_metric
 from gepadantic.reflection import ProposalOutput, UpdatedComponent
 from gepadantic.runner import optimize_agent_prompts
 from gepadantic.schema import DataInstWithInput, DataInstWithPrompt, RolloutOutput
+from gepadantic.signature_agent import SignatureAgent
 
 
 def test_cache_manager_basic():
@@ -208,9 +209,10 @@ def test_optimize_agent_prompts_with_caching():
             return score, f"Score: {score}"
 
         # Create agent
-        agent = Agent(
-            TestModel(custom_output_text="positive"),
-            instructions="Classify text as positive, negative, or neutral.",
+        base_agent = Agent(TestModel(custom_output_text="positive"))
+        signature_agent = SignatureAgent(
+            base_agent,
+            input_type=BaseModel,
         )
 
         reflection_output = ProposalOutput(
@@ -226,7 +228,7 @@ def test_optimize_agent_prompts_with_caching():
 
         # First run with caching enabled
         result1 = optimize_agent_prompts(
-            agent=agent,
+            signature_agent=signature_agent,
             trainset=trainset,
             metric=metric,
             reflection_model=reflection_model,
@@ -248,7 +250,7 @@ def test_optimize_agent_prompts_with_caching():
 
         # Second run should use cache for overlapping evaluations
         result2 = optimize_agent_prompts(
-            agent=agent,
+            signature_agent=signature_agent,
             trainset=trainset,
             metric=metric,
             reflection_model=reflection_model,
