@@ -79,10 +79,10 @@ class GepaConfig:
     """
 
     # Required configuration
-    input_type: type[BaseModel]
+    input_type: type[BaseModel] | None = None
     """Pydantic model class defining the structured input format."""
 
-    output_type: type[BaseModel]
+    output_type: type[BaseModel] | None = None
     """Pydantic model class defining the expected output format."""
 
     trainset: Sequence[DataInstWithInput[Any]]

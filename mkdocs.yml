@@ -1,5 +1,5 @@
 site_name: GEPAdantic
-site_description: GEPA-driven prompt optimization for pydantic-ai agents
+site_description: Pydantic interface for GEPA optimization
 site_url: https://pdoubleg.github.io/gepadantic
 repo_url: https://github.com/pdoubleg/gepadantic
 repo_name: pdoubleg/gepadantic

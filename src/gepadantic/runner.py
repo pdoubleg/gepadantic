@@ -48,6 +48,7 @@ def auto_budget(
     valset_size: int,
     minibatch_size: int = 35,
     full_eval_steps: int = 5,
+    num_preds: int = 1,
 ) -> int:
     """Calculate the total budget for GEPA optimization based on configuration parameters.
 
@@ -62,6 +63,7 @@ def auto_budget(
         valset_size: Size of the validation set.
         minibatch_size: Size of minibatches for evaluation. Defaults to 35.
         full_eval_steps: Number of steps between full evaluations. Defaults to 5.
+        num_preds: Number of "predictors" i.e., LLM calls. Defaults to 1.
 
     Returns:
         Total estimated number of metric calls needed.
@@ -72,7 +74,7 @@ def auto_budget(
     """
     import numpy as np
 
-    num_trials = int(max(2 * (1 * 2) * np.log2(num_candidates), 1.5 * num_candidates))
+    num_trials = int(max(2 * (num_preds * 2) * np.log2(num_candidates), 1.5 * num_candidates))
     if num_trials < 0 or valset_size < 0 or minibatch_size < 0:
         raise ValueError("num_trials, valset_size, and minibatch_size must be >= 0.")
     if full_eval_steps < 1:

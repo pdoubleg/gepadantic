@@ -1,6 +1,8 @@
 # Core Components
 
-GEPAdantic provides a bridge between [pydantic-ai](https://github.com/pydantic/pydantic-ai) agents and the [GEPA](https://github.com/stanfordnlp/dspy) optimization engine.
+GEPAdantic provides a bridge between Pydantic and the [GEPA](https://github.com/stanfordnlp/dspy) optimization engine. Under the hood we use the [pydantic-ai](https://github.com/pydantic/pydantic-ai) `Agent` class to call OpenAI and parse structured output. 
+
+> Optimization is **framework agnostic** in that the result is simply a dictionary of text components.
 
 ## Overview
 
