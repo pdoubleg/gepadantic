@@ -1,0 +1,37 @@
+{
+  "best_candidate": {
+    "instructions": "Generate a concise medical chronology entry from the provided clinical text. Include the date of service, provider name, and a detailed but succinct description of the encounter. Focus on key clinical findings, diagnoses, relevant diagnostic study results with specific details (e.g., imaging findings), treatments or interventions recommended or performed, patient consent when applicable, and future plans including follow-up. Use bullet points in the description to clearly list assessments, plans, and work status/restrictions when present. Avoid including irrelevant personal identifiers such as patient DOB or address. Summarize numeric pain scores, key functional limitations, and significant examination findings when available. Maintain clarity and precision suitable for medical review documentation.",
+    "tool:final_result:description": "A single concise medical chronology entry that includes the date of service, provider's name, and a detailed yet succinct description of the clinical encounter including chief complaint, relevant findings, diagnostic study summaries with specific details, assessment, plan, and any work status restrictions presented as bullet points.",
+    "tool:final_result:param:date_of_service": "Provide the exact date of service in ISO 8601 format (YYYY-MM-DD) as extracted directly from the document.",
+    "tool:final_result:param:provider_name": "Provide the full name and credentials of the provider who performed the service, including degrees and NPI number if available.",
+    "tool:final_result:param:description": "Create a detailed and formatted description for the medical chronology entry including:\n- Chief complaint or reason for visit\n- Clinical history summary with pain scores and key functional impacts\n- Relevant physical exam findings\n- Summary of diagnostic imaging/study results with specifics (e.g., disc protrusion location, stenosis details)\n- Assessment including diagnoses\n- Treatment or management plan including interventions, patient consent, and follow-up plans\n- Work status or activity restrictions if provided\n\nUse bullet points for clarity when listing assessments, plan components, or work status details. Omit unnecessary patient identifiers such as DOB, addresses, or insurance details. Ensure the description is suitable for medical legal documentation and review."
+  },
+  "best_score": 0.8799999999999999,
+  "original_candidate": {
+    "instructions": "Generate a medical chronology entry from the given text.",
+    "tool:final_result:description": "A single entry in the medical chronology.",
+    "tool:final_result:param:date_of_service": "Date of service",
+    "tool:final_result:param:provider_name": "Name of the provider",
+    "tool:final_result:param:description": "Description entry for a chronology"
+  },
+  "original_score": 0.6466666666666667,
+  "num_iterations": 2,
+  "num_metric_calls": 28,
+  "gepa_usage": {
+    "input_tokens": 134595,
+    "cache_write_tokens": 0,
+    "cache_read_tokens": 0,
+    "output_tokens": 6972,
+    "input_audio_tokens": 0,
+    "cache_audio_read_tokens": 0,
+    "output_audio_tokens": 0,
+    "details": {
+      "accepted_prediction_tokens": 0,
+      "audio_tokens": 0,
+      "reasoning_tokens": 0,
+      "rejected_prediction_tokens": 0
+    },
+    "requests": 31,
+    "tool_calls": 0
+  }
+}

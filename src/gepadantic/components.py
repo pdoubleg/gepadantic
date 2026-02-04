@@ -198,6 +198,7 @@ def extract_seed_candidate_with_signature(
     Args:
         agent: The agent to extract prompts from.
         input_type: Optional structured input specification to extract from.
+                   If str or None, no signature components are extracted.
 
     Returns:
         Combined dictionary of all components and their initial text.
@@ -207,8 +208,8 @@ def extract_seed_candidate_with_signature(
     # Extract from agent
     candidate.update(extract_seed_candidate(agent))
 
-    # Extract from signature if provided
-    if input_type:
+    # Extract from signature if provided and it's a BaseModel (not str)
+    if input_type is not None and input_type is not str:
         spec = build_input_spec(input_type)
         candidate.update(spec.get_gepa_components())
 
@@ -230,6 +231,7 @@ def apply_candidate_to_agent_and_signature(
         candidate: The candidate mapping component names to text.
         agent: The agent to apply prompts to.
         input_type: Optional structured input specification to apply to.
+                   If str or None, no signature components are applied.
 
     Yields:
         None while the candidate is applied.
@@ -240,8 +242,8 @@ def apply_candidate_to_agent_and_signature(
         # Apply to agent
         stack.enter_context(apply_candidate_to_agent(agent, candidate))
 
-        # Apply to signature if provided
-        if input_type:
+        # Apply to signature if provided and it's a BaseModel (not str)
+        if input_type is not None and input_type is not str:
             spec = build_input_spec(input_type)
             stack.enter_context(spec.apply_candidate(candidate))
 

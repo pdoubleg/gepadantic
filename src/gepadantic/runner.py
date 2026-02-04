@@ -254,7 +254,7 @@ class GepaOptimizationResult(BaseModel):
 
 
 def optimize_agent_prompts(
-    signature_agent: SignatureAgent[Any, Any],
+    signature_agent: AbstractAgent[Any, Any],
     trainset: Sequence[DataInstT],
     *,
     metric: Callable[[DataInstT, RolloutOutput[Any]], tuple[float, str | None]],
@@ -364,10 +364,16 @@ def optimize_agent_prompts(
         )
 
     # Extract seed candidate from agent and optional signature
+    # Only extract from input_type if it's a BaseModel (not str or None)
+    should_extract_input = (
+        input_type is not None 
+        and input_type is not str
+        and (not isinstance(input_type, type) or issubclass(input_type, BaseModel))
+    )
     extracted_seed_candidate = _normalize_candidate(
         extract_seed_candidate_with_signature(
             agent=signature_agent,
-            input_type=input_type,
+            input_type=input_type if should_extract_input else None,
         )
     )
     if seed_candidate is None:
@@ -409,10 +415,16 @@ def optimize_agent_prompts(
         reflection_model = signature_agent.wrapped.model.model_name
 
     # Create adapter
+    # Only pass input_type to adapter if it's a BaseModel (not str or None)
+    adapter_input_type = (
+        input_type 
+        if should_extract_input
+        else None
+    )
     adapter = PydanticAIGEPAAdapter(
         agent=signature_agent,
         metric=metric,
-        input_type=input_type,
+        input_type=adapter_input_type,
         reflection_sampler=reflection_sampler,
         reflection_model=reflection_model,
         cache_manager=cache_manager,

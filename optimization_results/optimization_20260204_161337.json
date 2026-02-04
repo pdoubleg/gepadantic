@@ -1,0 +1,29 @@
+{
+  "best_candidate": {
+    "instructions": "Generate a medical chronology entry from the given text."
+  },
+  "best_score": 0.86,
+  "original_candidate": {
+    "instructions": "Generate a medical chronology entry from the given text."
+  },
+  "original_score": 0.86,
+  "num_iterations": 2,
+  "num_metric_calls": 22,
+  "gepa_usage": {
+    "input_tokens": 42040,
+    "cache_write_tokens": 0,
+    "cache_read_tokens": 0,
+    "output_tokens": 6607,
+    "input_audio_tokens": 0,
+    "cache_audio_read_tokens": 0,
+    "output_audio_tokens": 0,
+    "details": {
+      "accepted_prediction_tokens": 0,
+      "audio_tokens": 0,
+      "reasoning_tokens": 0,
+      "rejected_prediction_tokens": 0
+    },
+    "requests": 24,
+    "tool_calls": 0
+  }
+}
