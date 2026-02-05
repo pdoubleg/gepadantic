@@ -220,13 +220,14 @@ class GepaOptimizationResult(BaseModel):
         self,
         *,
         agent: AbstractAgent[Any, Any],
-        input_type: InputSpec[BaseModel] | None = None,
+        input_type: InputSpec[BaseModel] | type[str] | None = None,
     ) -> Iterator[None]:
         """Apply the best candidate to an agent and optional signature.
 
         Args:
             agent: The agent to apply the best candidate to.
             input_type: Optional structured input specification to also apply the candidate to.
+                       Can be a BaseModel subclass, str, or None.
 
         Yields:
             None while the context is active.
@@ -259,7 +260,7 @@ def optimize_agent_prompts(
     *,
     metric: Callable[[DataInstT, RolloutOutput[Any]], tuple[float, str | None]],
     valset: Sequence[DataInstT] | None = None,
-    input_type: InputSpec[BaseModel] | None = None,
+    input_type: InputSpec[BaseModel] | type[str] | None = None,
     seed_candidate: dict[str, str] | None = None,
     # Budget
     max_metric_calls: int | None = None,
@@ -313,6 +314,7 @@ def optimize_agent_prompts(
         valset: Optional validation dataset. If not provided, trainset is used.
         input_type: Optional structured input specification whose instructions and
             field descriptions should be optimized alongside the agent's prompts.
+            Can be a BaseModel subclass, str (for string inputs), or None.
         seed_candidate: Optional seed candidate to start optimization from. If None, it will be inferred.
         max_metric_calls: Maximum number of metric evaluations (budget).
         max_full_evals: Maximum number of full evaluations (budget).

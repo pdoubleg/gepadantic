@@ -65,7 +65,7 @@ class PydanticAIGEPAAdapter(
         agent: AbstractAgent[Any, Any],
         metric: Callable[[DataInstT, RolloutOutput[Any]], tuple[float, str | None]],
         *,
-        input_type: InputSpec[BaseModel] | None = None,
+        input_type: InputSpec[BaseModel] | type[str] | None = None,
         reflection_sampler: ReflectionSampler | None = None,
         reflection_model: str | None = None,
         cache_manager: CacheManager | None = None,
@@ -79,6 +79,7 @@ class PydanticAIGEPAAdapter(
                    (second element) is optional but recommended for better optimization.
             input_type: Optional structured input specification whose instructions and field
                             descriptions will be optimized alongside the agent's prompts.
+                            Can be a BaseModel subclass, str (for string inputs), or None.
             reflection_sampler: Optional sampler for reflection records. If provided,
                                it will be called to sample records when needed. If None,
                                all reflection records are kept without sampling.
@@ -87,8 +88,9 @@ class PydanticAIGEPAAdapter(
         """
         self.agent = agent
         self.metric = metric
+        # Only build input_spec for BaseModel types, not str
         self.input_spec: BoundInputSpec[BaseModel] | None = (
-            build_input_spec(input_type) if input_type else None
+            build_input_spec(input_type) if input_type is not None and input_type is not str else None
         )
         self.reflection_sampler = reflection_sampler
         self.cache_manager = cache_manager

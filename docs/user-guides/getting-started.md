@@ -301,6 +301,242 @@ config = GepaConfig(
 )
 ```
 
+## Working with String Inputs
+
+While structured inputs (Pydantic models) are powerful, sometimes you need to work with simple string prompts. GEPAdantic fully supports `input_type=str` for these cases.
+
+### When to Use String Inputs
+
+Use `input_type=str` when:
+
+- You have unstructured text data (documents, medical records, transcripts)
+- Your input doesn't fit neatly into fields
+- You want to optimize just the agent instructions, not input field descriptions
+- You're migrating from a traditional prompt-based workflow
+
+### Basic String Input Example
+
+```python
+from gepadantic import GepaConfig, run_optimization_pipeline
+from gepadantic.schema import DataInstWithPrompt
+from pydantic_ai.messages import UserPromptPart
+
+# Define output structure
+class Summary(BaseModel):
+    key_points: list[str] = Field(description="Main points from the text")
+    sentiment: str = Field(description="Overall sentiment")
+
+# Create dataset with string inputs
+dataset = []
+for idx, text in enumerate(documents):
+    data_inst = DataInstWithPrompt(
+        user_prompt=UserPromptPart(content=text),
+        metadata={"expected_sentiment": labels[idx]},
+        case_id=f"doc-{idx}"
+    )
+    dataset.append(data_inst)
+
+# Split into train/val
+trainset = dataset[:70]
+valset = dataset[70:]
+
+# Define metric
+def metric(data_inst, output):
+    if not output.success:
+        return 0.0, f"Failed: {output.error_message}"
+    
+    predicted = output.result.sentiment
+    expected = data_inst.metadata["expected_sentiment"]
+    return 1.0 if predicted == expected else 0.0, None
+
+# Run optimization with str input
+config = GepaConfig(
+    agent_model="openai:gpt-4o-mini",
+    agent_instructions="Analyze the document and extract key information.",
+    input_type=str,  # Use string inputs
+    output_type=Summary,
+    trainset=trainset,
+    valset=valset,
+    metric=metric,
+    auto="light"
+)
+
+result = run_optimization_pipeline(config)
+```
+
+### Creating String Input Datasets
+
+The key is using `DataInstWithPrompt` instead of `DataInstWithInput`:
+
+```python
+from gepadantic.schema import DataInstWithPrompt
+from pydantic_ai.messages import UserPromptPart
+
+def create_string_dataset(
+    texts: list[str],
+    labels: list[dict],
+) -> list[DataInstWithPrompt]:
+    """Convert raw text data to GEPA format."""
+    dataset = []
+    
+    for idx, text in enumerate(texts):
+        data_inst = DataInstWithPrompt(
+            user_prompt=UserPromptPart(content=text),
+            metadata=labels[idx],  # Store labels/metadata for evaluation
+            case_id=f"item-{idx}"
+        )
+        dataset.append(data_inst)
+    
+    return dataset
+
+# Example usage
+texts = [
+    "Patient presented with severe headache and nausea...",
+    "Customer called regarding billing issue with last month's charge...",
+    "The quarterly report shows a 15% increase in revenue..."
+]
+
+labels = [
+    {"category": "medical", "urgency": "high"},
+    {"category": "billing", "urgency": "medium"},
+    {"category": "financial", "urgency": "low"}
+]
+
+dataset = create_string_dataset(texts, labels)
+```
+
+### Real-World Example: Medical Records
+
+Here's a complete example analyzing medical records:
+
+```python
+from pydantic import BaseModel, Field
+from gepadantic import GepaConfig, run_optimization_pipeline
+from gepadantic.schema import DataInstWithPrompt
+from pydantic_ai.messages import UserPromptPart
+
+# Output structure
+class MedicalChronology(BaseModel):
+    """Chronological summary of medical events."""
+    events: list[str] = Field(description="List of medical events in order")
+    date_of_service: str = Field(description="Date of the medical service")
+
+# Load your medical records
+medical_records = [
+    {
+        "text": "Patient John Doe presented on 2024-01-15 with complaints of...",
+        "date_of_service": "2024-01-15",
+        "expected_events": ["Initial consultation", "Blood work ordered"]
+    },
+    # ... more records
+]
+
+# Create dataset
+def create_medical_dataset(records):
+    dataset = []
+    for idx, record in enumerate(records):
+        data_inst = DataInstWithPrompt(
+            user_prompt=UserPromptPart(content=record["text"]),
+            metadata={
+                "date_of_service": record["date_of_service"],
+                "expected_events": record["expected_events"]
+            },
+            case_id=f"record-{idx}"
+        )
+        dataset.append(data_inst)
+    return dataset
+
+dataset = create_medical_dataset(medical_records)
+trainset = dataset[:int(len(dataset) * 0.7)]
+valset = dataset[int(len(dataset) * 0.7):]
+
+# Metric function
+def medical_metric(data_inst, output):
+    if not output.success:
+        return 0.0, f"Failed: {output.error_message}"
+    
+    # Check if date matches
+    predicted_date = output.result.date_of_service
+    expected_date = data_inst.metadata["date_of_service"]
+    
+    if predicted_date != expected_date:
+        return 0.0, f"Wrong date: expected {expected_date}, got {predicted_date}"
+    
+    # Check event extraction
+    predicted_events = output.result.events
+    expected_events = data_inst.metadata["expected_events"]
+    
+    # Simple overlap metric
+    overlap = len(set(predicted_events) & set(expected_events))
+    score = overlap / len(expected_events) if expected_events else 0.0
+    
+    return score, f"Found {overlap}/{len(expected_events)} events"
+
+# Run optimization
+config = GepaConfig(
+    agent_model="openai:gpt-4o-mini",
+    agent_instructions="Extract medical events from the record in chronological order.",
+    input_type=str,  # String input for unstructured medical text
+    output_type=MedicalChronology,
+    trainset=trainset,
+    valset=valset,
+    metric=medical_metric,
+    auto="medium"
+)
+
+result = run_optimization_pipeline(config)
+print(f"Optimized instructions: {result.best_candidate['instructions']}")
+```
+
+### String Input vs Structured Input
+
+| Feature | String Input (`str`) | Structured Input (`BaseModel`) |
+|---------|---------------------|-------------------------------|
+| **Input Format** | Raw text string | Pydantic model with fields |
+| **Field Descriptions** | N/A | Each field has optimizable description |
+| **Use Case** | Unstructured data | Multi-field structured data |
+| **GEPA Optimizes** | Agent instructions only | Instructions + field descriptions |
+| **Type Safety** | Basic (string) | Full Pydantic validation |
+| **Dataset Type** | `DataInstWithPrompt` | `DataInstWithInput` |
+
+### Key Differences
+
+**With string inputs:**
+- Only agent instructions are optimized
+- Input is passed directly to the agent
+- No field-level descriptions to optimize
+- Simpler for unstructured text
+
+**With structured inputs:**
+- Agent instructions AND field descriptions are optimized
+- Input is formatted with XML tags for each field
+- Each field description can be improved by GEPA
+- Better for multi-field data
+
+### Migration Path
+
+You can start with string inputs and migrate to structured inputs later:
+
+```python
+# Phase 1: Start with strings
+config = GepaConfig(
+    input_type=str,
+    # ... other config
+)
+
+# Phase 2: Migrate to structured inputs when ready
+class StructuredInput(BaseModel):
+    """Process medical records."""
+    text: str = Field(description="Medical record text")
+    patient_id: str = Field(description="Patient identifier")
+    date: str = Field(description="Date of service")
+
+config = GepaConfig(
+    input_type=StructuredInput,  # Now using structured input
+    # ... other config
+)
+```
+
 ## Tips for Success
 
 1. **Start with good baseline prompts**: GEPA optimization will evolve the initial seed prompt

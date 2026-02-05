@@ -87,15 +87,7 @@ Inputs
 - `<region>` (UnionType[str, NoneType]): Specific region to focus on, if applicable\
 """
     )
-    assert request.instructions == snapshot("""\
-You're an expert in geography.
-Ask a question about geography.
-
-Inputs
-
-- `<question>` (str): The geography question to ask
-- `<region>` (UnionType[str, NoneType]): Specific region to focus on, if applicable\
-""")
+    assert request.instructions == snapshot("You're an expert in geography.")
 
 
 def test_signature_agent_with_override_candidate():
@@ -150,15 +142,7 @@ Inputs
 """
     )
     assert request.instructions is not None
-    assert request.instructions == snapshot("""\
-Be concise and accurate.
-Focus on European capitals.
-
-Inputs
-
-- `<question>` (str): The capital city question
-- `<region>` (UnionType[str, NoneType]): Specific region to focus on, if applicable\
-""")
+    assert request.instructions == snapshot("Be concise and accurate.")
 
 
 def test_signature_agent_without_output_type():
@@ -601,3 +585,185 @@ def test_signature_agent_tool_candidate_modifies_definitions():
             )
         ]
     )
+
+
+def test_signature_agent_with_str_input_type():
+    """Test SignatureAgent with input_type=str."""
+    test_model = TestModel(custom_output_text="String response")
+
+    agent = Agent(
+        test_model,
+        instructions="You are a helpful assistant.",
+        output_type=str,
+        name="string_agent",
+    )
+
+    # Create SignatureAgent with input_type=str
+    signature_agent = SignatureAgent(
+        agent,
+        input_type=str,
+        output_type=str,
+    )
+
+    # Verify properties
+    assert signature_agent.input_type is str
+    assert signature_agent.input_model is str
+    assert signature_agent.input_spec is None
+    assert signature_agent._is_string_input is True
+
+    # Run with string input
+    result = signature_agent.run_signature_sync("Hello, how are you?")
+    assert result.output == "String response"
+
+    # Verify the prompt was passed as-is
+    request = result.all_messages()[0]
+    assert isinstance(request, ModelRequest)
+    user_parts = [part for part in request.parts if isinstance(part, UserPromptPart)]
+    assert len(user_parts) == 1
+    assert user_parts[0].content == "Hello, how are you?"
+
+
+def test_signature_agent_str_input_rejects_append_instructions():
+    """Test that append_instructions=True raises error when input_type=str."""
+    test_model = TestModel(custom_output_text="Response")
+
+    agent = Agent(
+        test_model,
+        instructions="Base instructions.",
+        output_type=str,
+        name="test_agent",
+    )
+
+    # Should raise ValueError when append_instructions=True with input_type=str
+    with pytest.raises(
+        ValueError, match="append_instructions cannot be True when input_type is str"
+    ):
+        SignatureAgent(
+            agent,
+            input_type=str,
+            output_type=str,
+            append_instructions=True,
+        )
+
+
+def test_signature_agent_str_input_default_append_instructions():
+    """Test that str input works with default append_instructions=False."""
+    test_model = TestModel(custom_output_text="Response")
+
+    agent = Agent(
+        test_model,
+        instructions="Base instructions.",
+        output_type=str,
+        name="test_agent",
+    )
+
+    # Create with default append_instructions=False
+    signature_agent = SignatureAgent(
+        agent,
+        input_type=str,
+        output_type=str,
+    )
+
+    result = signature_agent.run_signature_sync("Test prompt")
+
+    # Instructions should only contain base instructions
+    request = result.all_messages()[0]
+    assert isinstance(request, ModelRequest)
+    assert request.instructions == "Base instructions."
+
+
+def test_signature_agent_str_input_with_candidate():
+    """Test that candidates work with str input (only agent instructions, not signature)."""
+    test_model = TestModel(custom_output_text="Response")
+
+    agent = Agent(
+        test_model,
+        instructions="Original instructions.",
+        output_type=str,
+        name="test_agent",
+    )
+
+    signature_agent = SignatureAgent(
+        agent,
+        input_type=str,
+        output_type=str,
+    )
+
+    # Candidate should only affect agent instructions, not signature (since there is none)
+    candidate = {
+        "instructions": "Modified instructions.",
+    }
+
+    result = signature_agent.run_signature_sync("Test prompt", candidate=candidate)
+
+    request = result.all_messages()[0]
+    assert isinstance(request, ModelRequest)
+    assert request.instructions == "Modified instructions."
+
+
+@pytest.mark.asyncio
+async def test_signature_agent_str_input_async():
+    """Test async execution with str input."""
+    test_model = TestModel(custom_output_text="Async response")
+
+    agent = Agent(
+        test_model,
+        instructions="Assistant",
+        output_type=str,
+        name="async_agent",
+    )
+
+    signature_agent = SignatureAgent(
+        agent,
+        input_type=str,
+        output_type=str,
+    )
+
+    result = await signature_agent.run_signature("Async test prompt")
+    assert result.output == "Async response"
+
+
+@pytest.mark.asyncio
+async def test_signature_agent_str_input_streaming():
+    """Test streaming execution with str input."""
+    test_model = TestModel(custom_output_text="Streaming response")
+
+    agent = Agent(
+        test_model,
+        instructions="Assistant",
+        output_type=str,
+        name="stream_agent",
+    )
+
+    signature_agent = SignatureAgent(
+        agent,
+        input_type=str,
+        output_type=str,
+    )
+
+    async with signature_agent.run_signature_stream("Stream test") as stream:
+        output = await stream.get_output()
+        assert output == "Streaming response"
+
+
+def test_signature_agent_str_input_rejects_wrong_type():
+    """Test that str input type rejects non-string signatures."""
+    test_model = TestModel(custom_output_text="Response")
+
+    agent = Agent(
+        test_model,
+        instructions="Assistant",
+        output_type=str,
+        name="test_agent",
+    )
+
+    signature_agent = SignatureAgent(
+        agent,
+        input_type=str,
+        output_type=str,
+    )
+
+    # Should raise TypeError when passing a BaseModel instead of str
+    sig = GeographyQuery(question="Test", region=None)
+    with pytest.raises(TypeError, match="Expected signature of type str"):
+        signature_agent.run_signature_sync(sig)

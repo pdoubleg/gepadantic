@@ -111,6 +111,7 @@ def propose_new_texts(
     signature_agent = SignatureAgent(
         agent,
         input_type=ReflectionInput,
+        append_instructions=True,
     )
 
     result = signature_agent.run_signature_sync(signature)

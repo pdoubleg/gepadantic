@@ -363,6 +363,183 @@ signature_agent = SignatureAgent(
 # - "tool:search_database:param:query" - The parameter description
 ```
 
+## String Inputs
+
+`SignatureAgent` also supports `input_type=str` for working with unstructured text inputs. This is useful when your data doesn't fit neatly into structured fields.
+
+### Basic String Input Usage
+
+```python
+from pydantic_ai import Agent
+from gepadantic import SignatureAgent
+
+class Summary(BaseModel):
+    key_points: list[str]
+    sentiment: str
+
+# Create agent with string input
+agent = Agent('openai:gpt-4o', output_type=Summary)
+signature_agent = SignatureAgent(
+    agent,
+    input_type=str,  # Accept string inputs
+    output_type=Summary
+)
+
+# Run with a string
+text = "The quarterly results exceeded expectations with a 15% revenue increase..."
+result = await signature_agent.run_signature(text)
+```
+
+### String Input Behavior
+
+When `input_type=str`:
+
+1. **No Field Descriptions**: There are no input fields to describe or optimize
+2. **Direct Pass-Through**: The string is passed directly as the user prompt
+3. **No Schema Appending**: `append_instructions` is not applicable (raises error if set to `True`)
+
+GEPA will still optimize the agent's base instructions, and optionally output model &/or tool field descriptions.
+
+### Properties with String Input
+
+```python
+signature_agent = SignatureAgent(agent, input_type=str)
+
+# Properties reflect string input
+assert signature_agent.input_type is str
+assert signature_agent.input_model is str
+assert signature_agent.input_spec is None  # No structured spec
+assert signature_agent._is_string_input is True
+```
+
+### Validation
+
+`SignatureAgent` validates that the signature matches the configured input type:
+
+```python
+# This works
+signature_agent = SignatureAgent(agent, input_type=str)
+result = await signature_agent.run_signature("Some text")  # ✓
+
+# This raises TypeError
+class QueryInput(BaseModel):
+    question: str
+
+query = QueryInput(question="What is...?")
+result = await signature_agent.run_signature(query)  # ✗ TypeError
+```
+
+### append_instructions with String Input
+
+You cannot use `append_instructions=True` with string inputs because there's no schema to append:
+
+```python
+# This raises ValueError
+signature_agent = SignatureAgent(
+    agent,
+    input_type=str,
+    append_instructions=True  # ✗ Error: no schema to append
+)
+
+# This works (default is False)
+signature_agent = SignatureAgent(
+    agent,
+    input_type=str,
+    append_instructions=False  # ✓ or omit (default)
+)
+```
+
+### When to Use String vs Structured Inputs
+
+**Use `input_type=str` when:**
+- Working with unstructured documents, medical records, or transcripts
+- Input doesn't naturally split into named fields
+- You want to optimize only agent instructions
+- Migrating from traditional prompt-based workflows
+
+**Use `input_type=BaseModel` when:**
+- Data has multiple distinct pieces of information
+- You want type safety and validation
+- Field descriptions should be optimized separately
+- Input structure is well-defined
+
+### Example: Document Analysis
+
+```python
+from pydantic import BaseModel, Field
+from pydantic_ai import Agent
+from gepadantic import SignatureAgent
+
+class DocumentAnalysis(BaseModel):
+    """Analysis results for a document."""
+    summary: str = Field(description="Brief summary")
+    key_topics: list[str] = Field(description="Main topics discussed")
+    sentiment: str = Field(description="Overall sentiment")
+    action_items: list[str] = Field(description="Action items if any")
+
+# Agent for analyzing unstructured documents
+agent = Agent(
+    'openai:gpt-4o',
+    instructions="Analyze documents thoroughly and extract key information.",
+    output_type=DocumentAnalysis
+)
+
+# Use string input for unstructured text
+signature_agent = SignatureAgent(agent, input_type=str)
+
+# Analyze a document
+document = """
+Meeting Notes - Q4 Planning
+Date: January 15, 2024
+
+The team discussed Q4 goals and identified three key priorities:
+1. Launch the new mobile app by March
+2. Increase customer retention by 20%
+3. Expand to European markets
+
+Action items:
+- John to draft mobile app requirements
+- Sarah to analyze retention metrics
+- Mike to research EU regulations
+
+Overall sentiment was positive and energetic.
+"""
+
+result = await signature_agent.run_signature(document)
+print(result.data.key_topics)  # ['Q4 planning', 'Mobile app launch', ...]
+```
+
+### Optimization with String Inputs
+
+When optimizing with `input_type=str`, GEPA focuses on the agent's instructions:
+
+```python
+from gepadantic import optimize_agent_prompts
+
+# Initial instructions
+agent = Agent(
+    'openai:gpt-4o',
+    instructions="Analyze the document.",
+    output_type=DocumentAnalysis
+)
+
+signature_agent = SignatureAgent(agent, input_type=str)
+
+# GEPA will optimize only the instructions component
+result = optimize_agent_prompts(
+    signature_agent=signature_agent,
+    trainset=trainset,
+    valset=valset,
+    metric=metric,
+    auto="light"
+)
+
+# Optimized instructions might evolve to:
+# "Carefully analyze the document, identifying key topics, sentiment, 
+#  and action items. Extract information systematically and ensure 
+#  completeness."
+```
+
 ## Key Points
 
 1. **Type Safety**: Input models are validated Pydantic models with full type checking
@@ -370,6 +547,7 @@ signature_agent = SignatureAgent(
 3. **Optimization Target**: Each field description becomes a component GEPA can improve
 4. **Flexible**: Can be combined with regular pydantic-ai features like tools, dependencies, and streaming
 5. **Backward Compatible**: The wrapped agent still works normally; `SignatureAgent` just adds capabilities
+6. **String Input Support**: Use `input_type=str` for unstructured text inputs when fields don't make sense
 
 ## API Reference
 

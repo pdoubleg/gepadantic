@@ -93,8 +93,8 @@ class SignatureAgent(WrapperAgent[AgentDepsT, OutputDataT]):
         input_type: InputSpec[BaseModel] | type[str] | None = None,
         output_type: OutputSpec[OutputDataT] | type[OutputDataT] | None = None,
         *,
-        append_instructions: bool = True,
-        optimize_tools: bool = True,
+        append_instructions: bool = False,
+        optimize_tools: bool = False,
     ):
         """Initialize the SignatureAgent wrapper.
 
@@ -108,10 +108,12 @@ class SignatureAgent(WrapperAgent[AgentDepsT, OutputDataT]):
         # Determine if input_type is str
         self._is_string_input = input_type is str
         
-        # Build bound spec only for BaseModel types
-        bound_spec = None
-        if input_type is not None and input_type is not str:
-            bound_spec = build_input_spec(input_type) if isinstance(input_type, type) and issubclass(input_type, BaseModel) else input_type
+        # Build bound spec only for BaseModel types (not str or None)
+        bound_spec = (
+            build_input_spec(input_type) 
+            if input_type is not None and input_type is not str 
+            else None
+        )
 
         inferred_output_type = (
             output_type
@@ -124,6 +126,8 @@ class SignatureAgent(WrapperAgent[AgentDepsT, OutputDataT]):
                 "configure the wrapped agent with an output_type, or supply one "
                 "per-call when invoking signature runs."
             )
+        if self._is_string_input and append_instructions:
+            raise ValueError("append_instructions cannot be True when input_type is str (since there is schema information to append!)")
 
         super().__init__(wrapped)
         self.append_instructions = append_instructions

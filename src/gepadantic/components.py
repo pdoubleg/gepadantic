@@ -191,13 +191,14 @@ def validate_components(
 
 def extract_seed_candidate_with_signature(
     agent: AbstractAgent[Any, Any],
-    input_type: InputSpec[BaseModel] | None = None,
+    input_type: InputSpec[BaseModel] | type[str] | None = None,
 ) -> dict[str, str]:
     """Extract initial prompts from an agent and optionally a signature as a GEPA candidate.
 
     Args:
         agent: The agent to extract prompts from.
         input_type: Optional structured input specification to extract from.
+                   Can be a BaseModel subclass, str (for string inputs), or None.
                    If str or None, no signature components are extracted.
 
     Returns:
@@ -220,7 +221,7 @@ def extract_seed_candidate_with_signature(
 def apply_candidate_to_agent_and_signature(
     candidate: dict[str, str] | None,
     agent: AbstractAgent[Any, Any],
-    input_type: InputSpec[BaseModel] | None = None,
+    input_type: InputSpec[BaseModel] | type[str] | None = None,
 ) -> Iterator[None]:
     """Apply a GEPA candidate to an agent and optionally a signature.
 
@@ -231,6 +232,7 @@ def apply_candidate_to_agent_and_signature(
         candidate: The candidate mapping component names to text.
         agent: The agent to apply prompts to.
         input_type: Optional structured input specification to apply to.
+                   Can be a BaseModel subclass, str (for string inputs), or None.
                    If str or None, no signature components are applied.
 
     Yields:
