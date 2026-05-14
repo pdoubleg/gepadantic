@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 import json
 from typing import Any, Generic, Sequence, TypeVar
 
@@ -77,6 +77,8 @@ class DataInstWithInput(Generic[InputModelT]):
 
 DataInst = DataInstWithPrompt | DataInstWithInput[Any]
 
+DEFAULT_MAX_TOOL_RETURN_CHARS = 2000
+
 
 def _truncate_text(value: str, limit: int = 2000) -> str:
     """Truncate long strings to keep reflection records readable."""
@@ -133,23 +135,31 @@ def _serialize_user_prompt_content(content: str | Sequence[UserContent]) -> str:
 
 def _serialize_tool_return(
     part: ToolReturnPart | BuiltinToolReturnPart,
+    *,
+    max_chars: int = DEFAULT_MAX_TOOL_RETURN_CHARS,
 ) -> dict[str, Any]:
-    """Serialize tool return parts with compact metadata."""
-    content_str = _truncate_text(part.model_response_str())
+    """Serialize tool return parts with compact output."""
+    content_str = _truncate_text(part.model_response_str(), limit=max_chars)
     serialized = {
         "type": "tool_return",
         "tool_name": part.tool_name,
         "content": content_str,
         "tool_call_id": part.tool_call_id,
-        "timestamp": _timestamp_iso(part.timestamp),
     }
-    metadata = getattr(part, "metadata", None)
-    if metadata is not None:
-        serialized["metadata"] = repr(metadata)
-    provider_name = getattr(part, "provider_name", None)
-    if provider_name:
-        serialized["provider_name"] = provider_name
     return _compact_dict(serialized)
+
+
+def _serialize_tool_call(part: ToolCallPart | BuiltinToolCallPart) -> dict[str, Any]:
+    """Serialize tool call parts with arguments but no provider metadata."""
+    return _compact_dict(
+        {
+            "type": "tool_call",
+            "tool_name": part.tool_name,
+            "arguments": _truncate_text(part.args_as_json_str()),
+            "tool_call_id": part.tool_call_id,
+            "id": part.id,
+        }
+    )
 
 
 def _serialize_retry_part(part: RetryPromptPart) -> dict[str, Any]:
@@ -217,22 +227,12 @@ def _serialize_response_part(part: Any) -> dict[str, Any]:
                 "role": "assistant",
                 "content": _truncate_text(part.content),
                 "id": part.id,
-                "provider_name": part.provider_name,
             }
         )
     if isinstance(part, ToolCallPart | BuiltinToolCallPart):
-        serialized = {
-            "type": "tool_call",
-            "role": "assistant",
-            "tool_name": part.tool_name,
-            "arguments": _truncate_text(part.args_as_json_str()),
-            "tool_call_id": part.tool_call_id,
-            "id": part.id,
-        }
-        provider_name = getattr(part, "provider_name", None)
-        if provider_name:
-            serialized["provider_name"] = provider_name
-        return _compact_dict(serialized)
+        serialized = _serialize_tool_call(part)
+        serialized["role"] = "assistant"
+        return serialized
     if isinstance(part, BuiltinToolReturnPart):
         return _serialize_tool_return(part)
     if isinstance(part, FilePart):
@@ -242,7 +242,6 @@ def _serialize_response_part(part: Any) -> dict[str, Any]:
                 "role": "assistant",
                 "description": _describe_binary_content(part.content),
                 "id": part.id,
-                "provider_name": getattr(part, "provider_name", None),
             }
         )
     if hasattr(part, "content"):
@@ -280,17 +279,10 @@ def _serialize_model_message(
         base: dict[str, Any] = {
             "kind": "response",
             "model_name": message.model_name,
-            "provider_name": message.provider_name,
             "finish_reason": message.finish_reason,
             "timestamp": _timestamp_iso(message.timestamp),
             "parts": [_serialize_response_part(part) for part in message.parts],
         }
-        if message.provider_response_id:
-            base["provider_response_id"] = message.provider_response_id
-        if message.provider_details:
-            base["provider_details"] = message.provider_details
-        if message.usage and hasattr(message.usage, "__dataclass_fields__"):
-            base["usage"] = asdict(message.usage)
         return _compact_dict(base)
     return _compact_dict(
         {
@@ -311,6 +303,19 @@ class Trajectory:
     usage: dict[str, int] = field(default_factory=dict)
     data_inst: DataInst | None = None
     metric_feedback: str | None = None
+
+    def _extract_system_prompt(self) -> str | None:
+        """Extract the agent instructions/system prompt once for reflection."""
+        if self.instructions:
+            return self.instructions
+        for msg in self.messages:
+            if isinstance(msg, ModelRequest):
+                if msg.instructions:
+                    return msg.instructions
+                for part in msg.parts:
+                    if isinstance(part, SystemPromptPart):
+                        return part.content
+        return None
 
     def _extract_user_content(self, part: UserPromptPart) -> str:
         """Extract text content from a UserPromptPart."""
@@ -345,10 +350,41 @@ class Trajectory:
                         return part.content
         return None
 
-    def to_reflective_record(self) -> dict[str, Any]:
+    def _extract_tool_trace(
+        self,
+        *,
+        max_tool_return_chars: int = DEFAULT_MAX_TOOL_RETURN_CHARS,
+    ) -> list[dict[str, Any]]:
+        """Extract only tool calls and returns from the message transcript."""
+        trace: list[dict[str, Any]] = []
+        for msg in self.messages:
+            parts = getattr(msg, "parts", ())
+            for part in parts:
+                if isinstance(part, ToolCallPart | BuiltinToolCallPart):
+                    trace.append(_serialize_tool_call(part))
+                elif isinstance(part, ToolReturnPart | BuiltinToolReturnPart):
+                    trace.append(
+                        _serialize_tool_return(
+                            part,
+                            max_chars=max_tool_return_chars,
+                        )
+                    )
+                elif isinstance(part, RetryPromptPart):
+                    trace.append(_serialize_retry_part(part))
+        return trace
+
+    def to_reflective_record(
+        self,
+        *,
+        max_tool_return_chars: int = DEFAULT_MAX_TOOL_RETURN_CHARS,
+    ) -> dict[str, Any]:
         """Convert to a compact record for reflection."""
+        system_prompt = self._extract_system_prompt()
         user_msg = self._extract_user_message()
         assistant_msg = self._extract_assistant_message()
+        tool_trace = self._extract_tool_trace(
+            max_tool_return_chars=max_tool_return_chars
+        )
 
         # Format the final output appropriately
         if assistant_msg:
@@ -362,13 +398,14 @@ class Trajectory:
         else:
             response = "No output"
 
-        return {
+        record = {
+            "system_prompt": system_prompt,
             "user_prompt": user_msg or "No user message",
             "assistant_response": response,
             "error": self.error,
-            "messages": self._serialize_messages_with_instructions(),
-            "run_usage": self.usage or None,
+            "tool_trace": tool_trace or None,
         }
+        return _compact_dict(record)
 
     def _serialize_messages_with_instructions(self) -> list[dict[str, Any]]:
         """Serialize messages, attaching instructions only to the first request."""

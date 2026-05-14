@@ -298,6 +298,7 @@ result = optimize_agent_prompts(
     reflection_model="gpt-4.1-mini",
     candidate_selection_strategy="pareto",
     reflection_minibatch_size=3,
+    max_tool_return_chars=2000,
     
     # Component selection
     module_selector="all",
@@ -359,6 +360,7 @@ adapter = PydanticAIGEPAAdapter(
     agent=signature_agent,
     metric=species_metric,
     reflection_model="gpt-4.1-mini",
+    max_tool_return_chars=2000,
 )
 
 # 5. Create logger
@@ -473,6 +475,7 @@ You must provide **exactly one** of the following:
 | `seed_candidate` | `dict[str, str]` | `None` | Optional initial candidate prompts to start optimization from |
 | `reflection_model` | `str` | `None` | Model to use for reflection/mutation. If `None`, uses `agent_model` |
 | `reflection_minibatch_size` | `int` | `3` | Number of examples to use for reflection in each proposal |
+| `max_tool_return_chars` | `int` | `2000` | Maximum characters to include from each tool return in reflection traces |
 | `perfect_score` | `int` | `1` | The perfect score value to achieve |
 | `skip_perfect_score` | `bool` | `True` | Whether to skip updating if perfect score achieved on minibatch |
 | `reflection_sampler` | `ReflectionSampler` | `None` | Optional sampler for reflection records. If `None`, all records are kept |

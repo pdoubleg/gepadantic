@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import asdict
 import logging
 from typing import TYPE_CHECKING, Any, Generic, Protocol, TypeVar
 
@@ -19,7 +18,13 @@ from .reflection import propose_new_texts
 from .signature import BoundInputSpec, InputSpec, build_input_spec
 from .signature_agent import SignatureAgent
 from .cache import CacheManager
-from .schema import DataInst, DataInstWithPrompt, RolloutOutput, Trajectory
+from .schema import (
+    DEFAULT_MAX_TOOL_RETURN_CHARS,
+    DataInst,
+    DataInstWithPrompt,
+    RolloutOutput,
+    Trajectory,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +74,7 @@ class PydanticAIGEPAAdapter(
         reflection_sampler: ReflectionSampler | None = None,
         reflection_model: str | None = None,
         cache_manager: CacheManager | None = None,
+        max_tool_return_chars: int = DEFAULT_MAX_TOOL_RETURN_CHARS,
     ):
         """Initialize the adapter.
 
@@ -85,6 +91,7 @@ class PydanticAIGEPAAdapter(
                                all reflection records are kept without sampling.
             reflection_model: The model to use for reflection. If None, the agent's model will be used.
             cache_manager: The cache manager to use for caching.
+            max_tool_return_chars: Maximum characters to include from each tool return in reflection traces.
         """
         self.agent = agent
         self.metric = metric
@@ -99,6 +106,7 @@ class PydanticAIGEPAAdapter(
         else:
             self.reflection_model = agent.model.model_name
         self._gepa_usage = _usage.RunUsage()
+        self.max_tool_return_chars = max_tool_return_chars
 
     def _record_gepa_usage(self, run_usage: _usage.RunUsage | None) -> None:
         """Record GEPA usage."""
@@ -327,7 +335,7 @@ class PydanticAIGEPAAdapter(
                 instructions=instructions_text,
                 final_output=final_output,
                 error=None,
-                usage=asdict(result.usage()),
+                usage={},
                 data_inst=instance,
             )
             output = RolloutOutput.from_success(final_output)
@@ -391,7 +399,7 @@ class PydanticAIGEPAAdapter(
         """
         if not eval_batch.trajectories:
             # No trajectories available, return empty dataset
-            return {comp: [] for comp in components_to_update}
+            return {"traces": []}
 
         # Build reflection records from trajectories
         reflection_records: list[dict[str, Any]] = []
@@ -400,16 +408,15 @@ class PydanticAIGEPAAdapter(
             eval_batch.outputs,
             eval_batch.scores,
         ):
-            record: dict[str, Any] = trajectory.to_reflective_record()
+            record: dict[str, Any] = trajectory.to_reflective_record(
+                max_tool_return_chars=self.max_tool_return_chars
+            )
 
             # Add score and success information
             record["score"] = score
             record["success"] = output.success
             if output.error_message:
                 record["error_message"] = output.error_message
-
-            if trajectory.instructions:
-                record["instructions"] = trajectory.instructions
 
             # Use metric feedback if available, otherwise use a simple fallback
             feedback_text = trajectory.metric_feedback
@@ -436,9 +443,9 @@ class PydanticAIGEPAAdapter(
                 reflection_records, max_records=10
             )
 
-        # For pydantic-ai, all components work together, so they all need
-        # the same reflection data to understand the full context
-        return {comp: reflection_records for comp in components_to_update}
+        # Keep one shared trace set. Repeating the same records under every
+        # component bloats the reflection prompt when multiple components update.
+        return {"traces": reflection_records}
 
     def propose_new_texts(  # type: ignore[override]
         self,

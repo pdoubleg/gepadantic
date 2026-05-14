@@ -30,7 +30,7 @@ from .runner import (
     optimize_agent_prompts,
 )
 from .signature_agent import SignatureAgent
-from .schema import DataInstWithInput, RolloutOutput
+from .schema import DEFAULT_MAX_TOOL_RETURN_CHARS, DataInstWithInput, RolloutOutput
 
 # Type variables
 InputModelT = TypeVar("InputModelT", bound=BaseModel)
@@ -133,6 +133,9 @@ class GepaConfig:
 
     reflection_minibatch_size: int = 3
     """Number of examples to use for reflection in each proposal (default: 3)."""
+
+    max_tool_return_chars: int = DEFAULT_MAX_TOOL_RETURN_CHARS
+    """Maximum characters to include from each tool return in reflection traces (default: 2000)."""
 
     perfect_score: int = 1
     """The perfect score value to achieve (default: 1)."""
@@ -356,6 +359,7 @@ def run_optimization_pipeline(config: GepaConfig) -> GepaOptimizationResult:
         auto=config.auto,
         reflection_model=config.reflection_model,
         reflection_minibatch_size=config.reflection_minibatch_size,
+        max_tool_return_chars=config.max_tool_return_chars,
         perfect_score=config.perfect_score,
         skip_perfect_score=config.skip_perfect_score,
         candidate_selection_strategy=config.candidate_selection_strategy,

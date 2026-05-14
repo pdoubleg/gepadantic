@@ -135,19 +135,18 @@ When `capture_traces=True`, the adapter records execution details:
 ```python
 from gepadantic.types import Trajectory
 
-# Trajectory includes:
+# Raw trajectory includes:
 trajectory = Trajectory(
-    messages=[...],           # All ModelMessages exchanged
+    messages=[...],           # ModelMessages for compact trace extraction
     instructions="...",       # Agent instructions used
     final_output=result,      # Final output from agent
     error=None,               # Error message if failed
-    usage={...},              # Token usage statistics
     data_inst=data_inst,      # Original input
     metric_feedback="..."     # Feedback from metric function
 )
 ```
 
-This trajectory data powers GEPA's reflection mechanism.
+This raw trajectory powers a compact reflection record. Reflection records keep the system prompt and user prompt once, include the final response once, preserve tool calls/returns, and omit provider and usage metadata.
 
 ### 4. Reflection and Proposal
 
@@ -156,12 +155,13 @@ The adapter builds reflection datasets from trajectories:
 ```python
 # Reflection record structure
 reflection_record = {
-    'messages': [...],           # Conversation history
-    'final_output': result,      # Agent's output
-    'score': 0.85,              # Metric score
-    'success': True,            # Whether execution succeeded
-    'feedback': "...",          # Metric feedback
-    'instructions': "...",      # Instructions that were used
+    'system_prompt': "...",       # Agent instructions used for this run
+    'user_prompt': "...",         # User input for this run
+    'assistant_response': "...",  # Final answer/output
+    'tool_trace': [...],          # Tool calls and truncated tool returns
+    'score': 0.85,                # Metric score
+    'success': True,              # Whether execution succeeded
+    'feedback': "...",            # Metric feedback
 }
 ```
 
@@ -171,7 +171,7 @@ GEPA uses these records to propose improved prompts via reflection:
 # Adapter calls propose_new_texts internally
 new_candidate = adapter.propose_new_texts(
     candidate=current_prompts,
-    reflective_dataset=reflection_records,
+    reflective_dataset={'traces': [reflection_record]},
     components_to_update=['instructions', 'signature:TaskInput:text:desc']
 )
 ```
@@ -223,7 +223,8 @@ def sample_reflections(records, max_records):
 adapter = PydanticAIGEPAAdapter(
     agent=agent,
     metric=metric,
-    reflection_sampler=sample_reflections
+    reflection_sampler=sample_reflections,
+    max_tool_return_chars=2000,
 )
 ```
 

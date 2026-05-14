@@ -15,7 +15,6 @@ from gepa.proposer.reflective_mutation.base import (
     ReflectionComponentSelector,
 )
 from gepa.utils import StopperProtocol
-from gepadantic.signature_agent import SignatureAgent
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic_ai import usage as _usage
 
@@ -28,7 +27,7 @@ from .components import (
     normalize_component_text,
 )
 from .signature import InputSpec
-from .schema import DataInst, RolloutOutput
+from .schema import DEFAULT_MAX_TOOL_RETURN_CHARS, DataInst, RolloutOutput
 
 # Type variable for the DataInst type
 DataInstT = TypeVar("DataInstT", bound=DataInst)
@@ -272,6 +271,7 @@ def optimize_agent_prompts(
     | Literal["pareto", "current_best", "epsilon_greedy"] = "pareto",
     skip_perfect_score: bool = True,
     reflection_minibatch_size: int = 3,
+    max_tool_return_chars: int = DEFAULT_MAX_TOOL_RETURN_CHARS,
     perfect_score: int = 1,
     # Component selection configuration
     module_selector: ReflectionComponentSelector
@@ -323,6 +323,7 @@ def optimize_agent_prompts(
         candidate_selection_strategy: Strategy for selecting candidates ('pareto', 'current_best', or 'epsilon_greedy').
         skip_perfect_score: Whether to skip updating if perfect score achieved on minibatch.
         reflection_minibatch_size: Number of examples to use for reflection in each proposal.
+        max_tool_return_chars: Maximum characters to include from each tool return in reflection traces.
         perfect_score: The perfect score value to achieve (integer).
         module_selector: Component selection strategy. Can be a ReflectionComponentSelector
             instance or a string ('round_robin', 'all').
@@ -430,6 +431,7 @@ def optimize_agent_prompts(
         reflection_sampler=reflection_sampler,
         reflection_model=reflection_model,
         cache_manager=cache_manager,
+        max_tool_return_chars=max_tool_return_chars,
     )
 
     # Adjust module_selector based on number of components if needed

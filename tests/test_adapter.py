@@ -5,7 +5,14 @@ from typing import Any
 import time_machine
 from inline_snapshot import snapshot
 from pydantic_ai import Agent
-from pydantic_ai.messages import UserPromptPart
+from pydantic_ai.messages import (
+    ModelRequest,
+    ModelResponse,
+    TextPart,
+    ToolCallPart,
+    ToolReturnPart,
+    UserPromptPart,
+)
 from pydantic_ai.models.test import TestModel
 
 from gepadantic.adapter import PydanticAIGEPAAdapter
@@ -13,7 +20,7 @@ from gepadantic.components import (
     extract_seed_candidate,
     get_component_names,
 )
-from gepadantic.schema import DataInst, DataInstWithPrompt, RolloutOutput
+from gepadantic.schema import DataInst, DataInstWithPrompt, RolloutOutput, Trajectory
 
 
 def test_extract_seed_candidate():
@@ -113,64 +120,103 @@ def test_make_reflective_dataset():
     )
     assert reflective_dataset == snapshot(
         {
-            "instructions": [
+            "traces": [
                 {
+                    "system_prompt": "Be helpful",
                     "user_prompt": "Hello",
                     "assistant_response": "Test response",
-                    "error": None,
-                    "messages": [
-                        {
-                            "kind": "request",
-                            "parts": [
-                                {
-                                    "type": "user_prompt",
-                                    "role": "user",
-                                    "content": "Hello",
-                                    "timestamp": "2023-01-01T06:00:00+00:00",
-                                }
-                            ],
-                            "instructions": "Be helpful",
-                        },
-                        {
-                            "kind": "response",
-                            "model_name": "test",
-                            "timestamp": "2023-01-01T06:00:00+00:00",
-                            "parts": [
-                                {
-                                    "type": "text",
-                                    "role": "assistant",
-                                    "content": "Test response",
-                                }
-                            ],
-                            "usage": {
-                                "input_tokens": 51,
-                                "cache_write_tokens": 0,
-                                "cache_read_tokens": 0,
-                                "output_tokens": 2,
-                                "input_audio_tokens": 0,
-                                "cache_audio_read_tokens": 0,
-                                "output_audio_tokens": 0,
-                                "details": {},
-                            },
-                        },
-                    ],
-                    "run_usage": {
-                        "input_tokens": 51,
-                        "cache_write_tokens": 0,
-                        "cache_read_tokens": 0,
-                        "output_tokens": 2,
-                        "input_audio_tokens": 0,
-                        "cache_audio_read_tokens": 0,
-                        "output_audio_tokens": 0,
-                        "details": {},
-                        "requests": 1,
-                        "tool_calls": 0,
-                    },
                     "score": 0.8,
                     "success": True,
-                    "instructions": "Be helpful",
                     "feedback": "Good",
                 }
             ]
         }
     )
+
+
+def test_make_reflective_dataset_uses_shared_trace_bucket():
+    """Reflection records are not repeated once per component."""
+    agent = Agent(
+        TestModel(custom_output_text="Test response"), instructions="Be helpful"
+    )
+
+    def metric(
+        data_inst: DataInst, output: RolloutOutput[Any]
+    ) -> tuple[float, str | None]:
+        return (0.8, "Good") if output.success else (0.0, "Failed")
+
+    adapter = PydanticAIGEPAAdapter(agent, metric)
+    candidate = extract_seed_candidate(agent)
+
+    data_inst = DataInstWithPrompt(
+        user_prompt=UserPromptPart(content="Hello"),
+        message_history=None,
+        metadata={},
+        case_id="test-shared",
+    )
+    result = adapter.evaluate([data_inst], candidate, capture_traces=True)
+
+    reflective_dataset = adapter.make_reflective_dataset(
+        candidate,
+        result,
+        ["instructions", "signature:Input:field:desc"],
+    )
+
+    assert list(reflective_dataset) == ["traces"]
+    assert len(reflective_dataset["traces"]) == 1
+
+
+def test_reflective_record_truncates_tool_returns():
+    """Tool traces keep args and bounded return output without full message bloat."""
+    trajectory = Trajectory(
+        messages=[
+            ModelRequest(
+                [UserPromptPart(content="Look this up")],
+                instructions="Use tools carefully",
+            ),
+            ModelResponse(
+                [
+                    ToolCallPart(
+                        tool_name="lookup",
+                        args={"query": "alpha"},
+                        tool_call_id="call-1",
+                    )
+                ],
+                provider_name="test-provider",
+            ),
+            ModelRequest(
+                [
+                    ToolReturnPart(
+                        tool_name="lookup",
+                        content="abcdefghijklmnopqrstuvwxyz",
+                        tool_call_id="call-1",
+                    )
+                ]
+            ),
+            ModelResponse([TextPart(content="Done")]),
+        ],
+        final_output="Done",
+        instructions="Use tools carefully",
+    )
+
+    record = trajectory.to_reflective_record(max_tool_return_chars=5)
+
+    assert record["system_prompt"] == "Use tools carefully"
+    assert record["user_prompt"] == "Look this up"
+    assert record["assistant_response"] == "Done"
+    assert record["tool_trace"] == [
+        {
+            "type": "tool_call",
+            "tool_name": "lookup",
+            "arguments": '{"query":"alpha"}',
+            "tool_call_id": "call-1",
+        },
+        {
+            "type": "tool_return",
+            "tool_name": "lookup",
+            "content": "abcde... [truncated 21 chars]",
+            "tool_call_id": "call-1",
+        },
+    ]
+    assert "messages" not in record
+    assert "run_usage" not in record
