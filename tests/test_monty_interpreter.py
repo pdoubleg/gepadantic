@@ -7,6 +7,8 @@ semantics, error handling, and custom tools all behave as expected.
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 
 from gepadantic.rlm.interpreter import MontyCodeInterpreter
@@ -359,7 +361,7 @@ class TestCustomTools:
 
     @pytest.mark.asyncio
     async def test_async_tool_dispatched_as_future(self) -> None:
-        """An async tool should be dispatched as a Monty future and resolved."""
+        """An awaited async tool should be dispatched as a Monty future and resolved."""
 
         async def async_greet(name: str) -> str:
             return f"hello {name}"
@@ -369,10 +371,32 @@ class TestCustomTools:
             type_check=False,
         )
         result = await interp.execute_async(
-            "msg = async_greet('world')\nprint(msg)"
+            "msg = await async_greet('world')\nprint(msg)"
         )
         assert result is not None
         assert "hello world" in result
+
+    @pytest.mark.asyncio
+    async def test_multiple_async_tools_resolve_via_future_snapshot(self) -> None:
+        """Multiple awaited async tools should resolve through one FutureSnapshot."""
+
+        async def delayed(label: str) -> str:
+            """Return *label* after yielding to the event loop."""
+            await asyncio.sleep(0.01)
+            return label
+
+        interp = MontyCodeInterpreter(
+            tools={"delayed": delayed},
+            type_check=False,
+        )
+        result = await interp.execute_async(
+            "import asyncio\n"
+            "results = await asyncio.gather(delayed(label='a'), delayed(label='b'))\n"
+            "print(results)"
+        )
+
+        assert result is not None
+        assert "['a', 'b']" in result
 
 
 # ---------------------------------------------------------------------------

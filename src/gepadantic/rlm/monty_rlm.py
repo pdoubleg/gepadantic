@@ -60,7 +60,7 @@ When you want to execute Python code in the REPL environment, just write it dire
 say we want our recursive model to search for the magic number in the context (assuming the context is a string), and the context is very long, so we want to chunk it:
 ```python
 chunk = context[:10000]
-answer = llm_query(f"What is the magic number in the context? Here is the chunk: {chunk}")
+answer = await llm_query(f"What is the magic number in the context? Here is the chunk: {chunk}")
 print(answer)
 SAVE(answer=answer)
 ```
@@ -71,19 +71,19 @@ on that chunk, and track relevant information in a buffer using SAVE():
 query = "In Harry Potter and the Sorcerer's Stone, did Gryffindor win the House Cup because they led?"
 # First iteration - process first section
 section = context[0]
-buffer = llm_query(f"You are iteratively looking through a book. Gather information to help answer {query}. Here is section 0 of {len(context)}: {section}")
+buffer = await llm_query(f"You are iteratively looking through a book. Gather information to help answer {query}. Here is section 0 of {len(context)}: {section}")
 SAVE(buffer=buffer, idx=1)
 print(f"After section 0 of {len(context)}, you have tracked: {buffer}")
 # Subsequent iterations - continue processing
 if idx < len(context) - 1:
     section = context[idx]
-    buffer = llm_query(f"You are iteratively looking through a book, and are on section {idx} of {len(context)}. So far you know: {buffer}. Gather information to help answer {query}. Here is the section: {section}")
+    buffer = await llm_query(f"You are iteratively looking through a book, and are on section {idx} of {len(context)}. So far you know: {buffer}. Gather information to help answer {query}. Here is the section: {section}")
     SAVE(buffer=buffer, idx=idx + 1)
     print(f"After section {idx} of {len(context)}, you have tracked: {buffer}")
 # Final iteration - answer the question
 else:
     section = context[-1]
-    final_answer = llm_query(f"You are on the last section of the book. So far you know that: {buffer}. Gather from this last section to answer {query}. Here is the section: {section}")
+    final_answer = await llm_query(f"You are on the last section of the book. So far you know that: {buffer}. Gather from this last section to answer {query}. Here is the section: {section}")
     print(f"Based on reading iteratively through the book, the answer is: {final_answer}")
     SUBMIT(answer=final_answer)
 ```
@@ -106,10 +106,10 @@ SAVE(chunks=chunks)
 
 # Use batched query for concurrent processing - much faster than sequential calls!
 prompts = [f"Try to answer the following query: {query}. Here are the documents:\\n{chunk}. Only answer if you are confident in your answer based on the evidence." for chunk in chunks]
-answers = llm_query_batched(prompts)
+answers = await llm_query_batched(prompts)
 for i, answer in enumerate(answers):
     print(f"I got the answer from chunk {i}: {answer}")
-final_answer = llm_query(f"Aggregating all the answers per chunk, answer the original query about total number of jobs: {query}\\n\\nAnswers:\\n" + "\\n".join(answers))
+final_answer = await llm_query(f"Aggregating all the answers per chunk, answer the original query about total number of jobs: {query}\\n\\nAnswers:\\n" + "\\n".join(answers))
 print(f"Final answer: {final_answer}")
 SAVE(final_answer=final_answer)
 # Don't call SUBMIT() here, we'll call it in the next iteration after reviewing the printed output
@@ -122,12 +122,12 @@ As a final example, implement the solution as a program: try one approach; inspe
 into one easier subproblem and delegate that. More branches, one path runs—don't overload the context. Example: prove sqrt 2 irrational.
 ```python
 # First iteration - try direct approach
-approach_result = llm_query("Prove sqrt 2 is irrational. Give a 1-2 sentence proof, or reply only: USE_LEMMA or USE_CONTRADICTION.")
+approach_result = await llm_query("Prove sqrt 2 is irrational. Give a 1-2 sentence proof, or reply only: USE_LEMMA or USE_CONTRADICTION.")
 SAVE(approach_result=approach_result)
 print(f"Initial approach result: {approach_result}")
 # Second iteration - branch based on result
 if "USE_LEMMA" in approach_result.upper():
-    final_answer = llm_query("Prove 'n^2 even => n even' then use it to show sqrt 2 irrational. Two sentences.")
+    final_answer = await llm_query("Prove 'n^2 even => n even' then use it to show sqrt 2 irrational. Two sentences.")
     SAVE(final_answer=final_answer)
     print(f"Final proof: {final_answer}")
 else:
@@ -151,7 +151,7 @@ CRITICAL WORKFLOW:
 
 Example of CORRECT workflow:
 # Iteration N: Create and inspect final answer
-final_answer = llm_query(f"Based on all evidence, what is the final answer? Evidence: {accumulated_data}")
+final_answer = await llm_query(f"Based on all evidence, what is the final answer? Evidence: {accumulated_data}")
 SAVE(final_answer=final_answer)
 print(f"Final answer: {final_answer}")
 # DON'T call SUBMIT yet - need to see the output first!
@@ -182,7 +182,6 @@ Remember: Variables saved with SAVE() persist across iterations and are automati
 """
 
 
-
 MONTY_DEFAULT_EXAMPLES = """
 EXAMPLES — Strategies for large contexts:
 Sub-LLMs are powerful — they can fit ~250K characters in their context window. Analyze your input data size and structure first, then pick a strategy. \
@@ -199,14 +198,14 @@ SAVE(chunks=chunks)
 # Query each chunk
 answers = []
 for i, chunk in enumerate(chunks):
-    answer = llm_query(f"What is the magic number in chunk {{i+1}}? Here is the chunk:\n{{chunk}}")
+    answer = await llm_query(f"What is the magic number in chunk {{i+1}}? Here is the chunk:\n{{chunk}}")
     answers.append(answer)
     print(f"Chunk {{i+1}} answer: {{answer}}")
 SAVE(answers=answers)
 
 # Combine results with a final query
 if len(answers) > 1:
-    final_answer = llm_query(f"Based on these answers from different chunks, what is the final magic number?\n{{answers}}")
+    final_answer = await llm_query(f"Based on these answers from different chunks, what is the final magic number?\n{{answers}}")
     print(f"Final answer: {{final_answer}}")
     SAVE(final_answer=final_answer)
     SUBMIT(magic_number=final_answer)
@@ -219,7 +218,7 @@ Example 2 — Iterative section-by-section reading with SAVE():
 When your context is a list (e.g. sections, pages, chapters), process it iteratively and persist progress with SAVE(). In the first iteration, start processing:
 ```python
 section = context[0]
-result = llm_query(f"Extract key facts about '{{query}}' from this section:\\n{{section}}")
+result = await llm_query(f"Extract key facts about '{{query}}' from this section:\\n{{section}}")
 SAVE(results=[result], next_idx=1)
 print(f"Section 0: {{result}}")
 ```
@@ -227,13 +226,13 @@ In subsequent iterations, continue from where you left off:
 ```python
 if next_idx < len(context):
     section = context[next_idx]
-    result = llm_query(f"Known so far: {{results}}\\nExtract new facts from this section:\\n{{section}}")
+    result = await llm_query(f"Known so far: {{results}}\\nExtract new facts from this section:\\n{{section}}")
     results.append(result)
     SAVE(results=results, next_idx=next_idx + 1)
     print(f"Section {{next_idx}}: {{result}}")
 else:
     # All sections processed, combine and submit
-    final_answer = llm_query(f"Based on all these facts, provide a comprehensive answer to '{{query}}':\\n" + "\\n".join(results))
+    final_answer = await llm_query(f"Based on all these facts, provide a comprehensive answer to '{{query}}':\\n" + "\\n".join(results))
     print(f"Final answer: {{final_answer}}")
     SUBMIT(answer=final_answer)
 ```
@@ -244,10 +243,10 @@ When you can split the context into independent chunks, use llm_query_batched fo
 chunk_size = len(context) // 10
 chunks = [context[i:i + chunk_size] for i in range(0, len(context), chunk_size)]
 prompts = [f"Answer '{{query}}' based on this excerpt:\\n{{c}}" for c in chunks]
-answers = llm_query_batched(prompts)
+answers = await llm_query_batched(prompts)
 for i, ans in enumerate(answers):
     print(f"Chunk {{i}}: {{ans}}")
-final_answer = llm_query(f"Combine these partial answers into one final answer for '{{query}}':\\n" + "\\n".join(answers))
+final_answer = await llm_query(f"Combine these partial answers into one final answer for '{{query}}':\\n" + "\\n".join(answers))
 print(f"Final answer: {{final_answer}}")
 SAVE(final_answer=final_answer)
 # Don't call SUBMIT() here, we'll call it in the next iteration after reviewing the printed output
@@ -262,10 +261,10 @@ for part in parts[1:]:
     lines = part.split('\\n')
     header = lines[0]
     body = '\\n'.join(lines[1:])
-    summary = llm_query(f"Summarize the '{{header}}' section:\\n{{body}}")
+    summary = await llm_query(f"Summarize the '{{header}}' section:\\n{{body}}")
     summaries.append(f"{{header}}: {{summary}}")
     print(f"Summarized: {{header}}")
-final_answer = llm_query(f"Based on these summaries, answer '{{query}}':\\n" + "\\n".join(summaries))
+final_answer = await llm_query(f"Based on these summaries, answer '{{query}}':\\n" + "\\n".join(summaries))
 SAVE(final_answer=final_answer)
 print(f"Answer: {{final_answer}}")
 # Don't call SUBMIT() here, we'll call it in the next iteration after reviewing the printed output
@@ -282,7 +281,7 @@ Subsequent iterations:
 ```python
 if next_idx < len(chunks):
     # Process chunk and accumulate result in saved variable
-    result = llm_query(f"Extract information from: {{chunks[next_idx]}}")
+    result = await llm_query(f"Extract information from: {{chunks[next_idx]}}")
     full_results.append(result)
     SAVE(full_results=full_results, next_idx=next_idx + 1)
     # Only print progress, not the full accumulated data
@@ -314,8 +313,8 @@ more code based on what you learned. This is an iterative process, with each ste
 
 Available:
 - Variables: {inputs} (your input data — re-injected every iteration)
-- `llm_query(prompt)` - query a sub-LLM (~100K char capacity) for semantic analysis
-- `llm_query_batched(prompts)` - query multiple prompts concurrently (much faster for multiple queries)
+- `await llm_query(prompt)` - query a sub-LLM (~100K char capacity) for semantic analysis
+- `await llm_query_batched(prompts)` - query multiple prompts concurrently (much faster for multiple queries)
 - `print()` - ALWAYS print to see results
 - `SAVE(name=value, ...)` - IMPORTANT: use this to persist variables across iterations (re-injected automatically next iteration)
 - `CLEAR(name1, name2, ...)` or `CLEAR()` - remove saved variables (all if no args)
@@ -328,7 +327,7 @@ Be mindful that in the case of code interpreter errors, objects created by that 
 1. EXPLORE FIRST - Look at your data before processing it. Print samples, check types/lengths, understand the structure.
 2. ITERATE - Write small code snippets, observe outputs, then decide next steps. Use `SAVE()` to persist intermediate results across iterations.
 3. VERIFY BEFORE SUBMITTING - If results seem wrong (zeros, empty, unexpected), reconsider your approach.
-4. USE llm_query FOR SEMANTICS - String matching finds WHERE things are; llm_query understands WHAT things mean.
+4. USE await llm_query FOR SEMANTICS - String matching finds WHERE things are; llm_query understands WHAT things mean.
 5. MINIMIZE RETYPING (INPUTS & OUTPUTS) - When values are long, precise, or error-prone (IDs, numbers, code, quotes), re-access them via input variables and parse/compute in code instead of retyping.
 6. SUBMIT ONLY AFTER SEEING OUTPUTS - SUBMIT ends the current run immediately. If you need to inspect printed output, run it in one step, review the result, then call SUBMIT in a later step.
 
@@ -365,7 +364,9 @@ def _strip_code_fences(code: str) -> str:
 # Functions reserved for the sandbox interpreter
 # ---------------------------------------------------------------------------
 
-_RESERVED_TOOL_NAMES = frozenset({"llm_query", "llm_query_batched", "SUBMIT", "print", "SAVE", "CLEAR"})
+_RESERVED_TOOL_NAMES = frozenset(
+    {"llm_query", "llm_query_batched", "SUBMIT", "print", "SAVE", "CLEAR"}
+)
 
 
 @dataclass(frozen=True)
@@ -548,7 +549,9 @@ class MontyRLM(Generic[OutputT]):
         result: dict[str, _ToolInfo] = {}
         for func in tools:
             if not callable(func):
-                raise TypeError(f"Tool {func!r} must be callable, got {type(func).__name__}")
+                raise TypeError(
+                    f"Tool {func!r} must be callable, got {type(func).__name__}"
+                )
             info = _extract_tool_info(func)
             result[info.name] = info
         return result
@@ -565,9 +568,13 @@ class MontyRLM(Generic[OutputT]):
         """
         for name in tools:
             if not name.isidentifier():
-                raise ValueError(f"Invalid tool name '{name}': must be a valid Python identifier")
+                raise ValueError(
+                    f"Invalid tool name '{name}': must be a valid Python identifier"
+                )
             if name in _RESERVED_TOOL_NAMES:
-                raise ValueError(f"Tool name '{name}' conflicts with a built-in sandbox function")
+                raise ValueError(
+                    f"Tool name '{name}' conflicts with a built-in sandbox function"
+                )
 
     def _format_tool_docs(self) -> str:
         """Render user-tool signatures for inclusion in the system prompt.
@@ -577,7 +584,9 @@ class MontyRLM(Generic[OutputT]):
         """
         if not self._user_tools:
             return ""
-        lines = ["\nAdditional tools available (use these instead of standard library equivalents):"]
+        lines = [
+            "\nAdditional tools available (use these instead of standard library equivalents):"
+        ]
         for info in self._user_tools.values():
             params_str = ", ".join(f"{p}: {t}" for p, t in info.params)
             lines.append(f"- `{info.name}({params_str})` - {info.desc}")
@@ -639,7 +648,9 @@ class MontyRLM(Generic[OutputT]):
                 + self._instructions
                 + "\n\n"
             )
-        return _EXTRACT_INSTRUCTIONS_TEMPLATE.format(task_instructions=task_instructions)
+        return _EXTRACT_INSTRUCTIONS_TEMPLATE.format(
+            task_instructions=task_instructions
+        )
 
     @staticmethod
     def _build_action_user_prompt(
@@ -706,11 +717,10 @@ class MontyRLM(Generic[OutputT]):
         """Create async ``llm_query`` and ``llm_query_batched`` functions.
 
         Both functions are ``async def`` coroutines that use
-        ``await agent.run()`` directly.  When executed inside the Monty
-        sandbox, returning a coroutine causes the interpreter to register
-        the call as a Monty future via ``resume(future=...)``.  This means
-        multiple ``llm_query`` calls issued before their results are consumed
-        automatically run concurrently -- no threading required.
+        ``await agent.run()`` directly.  Sandbox code must call them with
+        ``await``; the interpreter registers the resulting coroutine as a
+        Monty future via ``resume({"future": ...})`` and resolves it when
+        Monty reaches a future snapshot.
 
         Args:
             tracker: Usage tracker to record token spend.
@@ -726,7 +736,7 @@ class MontyRLM(Generic[OutputT]):
             """Enforce the per-run sub-LLM call limit.
 
             Safe without a lock because the interpreter steps through
-            MontySnapshot calls sequentially -- this is always called
+            FunctionSnapshot calls sequentially. This is always called
             from the interpreter's stepping loop before the async task
             is created.
             """
@@ -747,9 +757,8 @@ class MontyRLM(Generic[OutputT]):
         async def llm_query(prompt: str) -> str:
             """Query the sub-LLM with a single prompt string.
 
-            This is an async function -- when called from the Monty sandbox,
-            the interpreter dispatches it as a Monty future for implicit
-            concurrency.
+            This is an async function. Sandbox code must call it with
+            ``await`` so Monty can resolve it as a future.
 
             Args:
                 prompt: The prompt to send to the LLM.
@@ -766,10 +775,8 @@ class MontyRLM(Generic[OutputT]):
             """Query the sub-LLM with multiple prompts concurrently.
 
             Uses ``asyncio.gather`` to run all prompts in parallel.  This
-            is still useful as an explicit batching API (atomic rate-limit
-            reservation, single external call from the sandbox), even though
-            individual ``llm_query`` calls also get implicit concurrency
-            through Monty's futures mechanism.
+            is still useful as an explicit batching API with atomic rate-limit
+            reservation and a single external call from the sandbox.
 
             Args:
                 prompts: List of prompt strings.
@@ -798,7 +805,9 @@ class MontyRLM(Generic[OutputT]):
     # Execution helpers
     # =====================================================================
 
-    def _prepare_execution_tools(self, tracker: UsageTracker) -> dict[str, Callable[..., Any]]:
+    def _prepare_execution_tools(
+        self, tracker: UsageTracker
+    ) -> dict[str, Callable[..., Any]]:
         """Merge LLM tools with user-provided tools for the interpreter.
 
         Args:
@@ -869,7 +878,9 @@ class MontyRLM(Generic[OutputT]):
                 parsed = self._output_type(value)
                 return parsed, None
             except (TypeError, ValueError) as e:
-                type_name = getattr(self._output_type, "__name__", str(self._output_type))
+                type_name = getattr(
+                    self._output_type, "__name__", str(self._output_type)
+                )
                 return None, f"[Type Error] Cannot convert to {type_name}: {e}"
 
         # --- BaseModel output type ---
@@ -916,7 +927,9 @@ class MontyRLM(Generic[OutputT]):
             parsed, error = self._process_final_output(exec_result)
 
             if error:
-                return history.append(reasoning=action.reasoning, code=code, output=error)
+                return history.append(
+                    reasoning=action.reasoning, code=code, output=error
+                )
 
             # Success -- build final result
             final_history = history.append(
@@ -939,7 +952,7 @@ class MontyRLM(Generic[OutputT]):
 
         output = self._format_output(output)
         if self._verbose:
-            logger.info(output[:self._max_output_chars])
+            logger.info(output[: self._max_output_chars])
         return history.append(reasoning=action.reasoning, code=code, output=output)
 
     # =====================================================================
@@ -1003,7 +1016,10 @@ class MontyRLM(Generic[OutputT]):
         for iteration in range(self._max_iterations):
             # Build user prompt for this iteration
             user_prompt = self._build_action_user_prompt(
-                variables, history, iteration, self._max_iterations,
+                variables,
+                history,
+                iteration,
+                self._max_iterations,
             )
 
             # Call the action agent (async)
@@ -1021,12 +1037,13 @@ class MontyRLM(Generic[OutputT]):
                     action.code,
                 )
 
-            # Execute code in the Monty sandbox.  Async tools (llm_query)
-            # are dispatched as Monty futures and resolved concurrently.
+            # Execute code in the Monty sandbox. Async tools such as
+            # llm_query must be awaited so Monty can resolve their futures.
             try:
                 code = _strip_code_fences(action.code)
                 exec_result = await interpreter.execute_async(
-                    code, dict(inputs),
+                    code,
+                    dict(inputs),
                 )
             except (CodeExecutionError, SyntaxError) as e:
                 exec_result = f"[Error] {e}"
@@ -1039,7 +1056,9 @@ class MontyRLM(Generic[OutputT]):
 
         # Max iterations exhausted -- use the extract agent as a fallback
         return await self._extract_fallback(
-            variables, history, extract_system_prompt,
+            variables,
+            history,
+            extract_system_prompt,
         )
 
     async def _extract_fallback(
@@ -1109,8 +1128,10 @@ class MontyRLM(Generic[OutputT]):
         _tool_fn.__name__ = name
         _tool_fn.__qualname__ = name
         # Get a readable name for the output type
-        output_type_name = getattr(self._output_type, "__name__", str(self._output_type))
-        
+        output_type_name = getattr(
+            self._output_type, "__name__", str(self._output_type)
+        )
+
         _tool_fn.__doc__ = (
             f"Analyse large context using a Recursive Language Model (RLM).\n\n"
             f"The RLM iteratively writes and executes Python code in a sandbox to explore\n"

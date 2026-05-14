@@ -3,10 +3,9 @@
 Provides :class:`MontyCodeInterpreter`, a standalone code execution engine that
 uses ``pydantic-monty`` to run untrusted Python in a restricted sandbox.
 
-Async external functions (like ``llm_query``) are awaited transparently by the
-interpreter, so sandbox code does not need ``await``.  Monty's futures mechanism
-(``MontyFutureSnapshot``) is also supported for sandbox code that explicitly
-uses ``await`` with Monty's built-in ``asyncio`` support.
+Async external functions (like ``llm_query``) must be awaited by sandbox code.
+The interpreter resolves Monty's future snapshots so multiple awaited tool calls
+can run concurrently.
 """
 
 from __future__ import annotations
@@ -21,7 +20,6 @@ import pydantic_monty
 from .types import CodeExecutionError, FinalOutput
 
 
-
 class MontyCodeInterpreter:
     """Code interpreter backed by the ``pydantic-monty`` restricted sandbox.
 
@@ -30,16 +28,10 @@ class MontyCodeInterpreter:
     calls.  ``CLEAR()`` removes saved values and ``SUBMIT()`` signals that
     the RLM loop should terminate with a final answer.
 
-    Async external functions are automatically detected via
-    ``inspect.iscoroutine`` and awaited transparently, so the sandbox
-    code does not need to use ``await``.  Concurrency for multiple
-    sub-LLM calls is provided by ``llm_query_batched``, which internally
-    uses ``asyncio.gather``.
-
-    If the sandbox code *does* use ``await`` (Monty supports the
-    ``asyncio`` module), async tools are dispatched as Monty futures
-    via ``resume(future=...)`` and resolved when the ``await`` triggers
-    a ``MontyFutureSnapshot``.
+    Async external functions must be called with ``await``.  When a tool
+    returns an awaitable, it is dispatched as a Monty future via
+    ``resume({"future": ...})`` and resolved when Monty yields a
+    ``FutureSnapshot``.
 
     Args:
         tools: Dictionary mapping tool names to callable functions.
@@ -65,13 +57,13 @@ class MontyCodeInterpreter:
         type_check: bool = True,
         type_check_stubs: str | None = None,
         limits: pydantic_monty.ResourceLimits | None = None,
-        os_access: pydantic_monty.OsAccess | None = None,
+        os_access: pydantic_monty.OSAccess | None = None,
     ) -> None:
         self._tools: dict[str, Callable[..., Any]] = dict(tools) if tools else {}
         self._type_check = type_check
         self._type_check_stubs = type_check_stubs
         self._limits = limits
-        self._os_access: pydantic_monty.OSAccess | None = os_access
+        self._os_access = os_access
         # Persistent state preserved across execute_async() calls via SAVE/CLEAR
         self._state: dict[str, Any] = {}
         # Output field metadata for positional-arg SUBMIT mapping
@@ -106,10 +98,10 @@ class MontyCodeInterpreter:
     ) -> Any:
         """Execute *code* inside the Monty sandbox and return the result.
 
-        Async external functions (those returning coroutines) are
-        awaited transparently so the sandbox code can call them without
-        ``await``.  Concurrency for batched LLM queries is handled
-        inside ``llm_query_batched`` via ``asyncio.gather``.
+        Async external functions (those returning coroutines) must be
+        awaited by sandbox code.  The interpreter schedules those
+        coroutines as Monty futures and resolves them when execution
+        reaches a ``FutureSnapshot``.
 
         Args:
             code: Python source to execute.
@@ -159,7 +151,6 @@ class MontyCodeInterpreter:
             monty = pydantic_monty.Monty(
                 code,
                 inputs=list(merged_vars) if merged_vars else [],
-                external_functions=list(all_tools),
                 type_check=self._type_check,
                 type_check_stubs=self._type_check_stubs,
             )
@@ -179,17 +170,21 @@ class MontyCodeInterpreter:
                 inputs=merged_vars or None,
                 limits=self._limits,
                 print_callback=_capture_print,
+                os=self._os_access,
             )
         except pydantic_monty.MontyRuntimeError as e:
             raise CodeExecutionError(str(e)) from e
 
         # Track pending async tasks keyed by Monty call_id
-        pending_tasks: dict[int, asyncio.Task[tuple[int, dict[str, Any]]]] = {}
+        pending_tasks: dict[int, asyncio.Task[Any]] = {}
 
         try:
             # -- step through Monty snapshots --------------------------------
             while not isinstance(progress, pydantic_monty.MontyComplete):
-                if isinstance(progress, pydantic_monty.MontySnapshot):
+                if isinstance(progress, pydantic_monty.NameLookupSnapshot):
+                    progress = progress.resume(os=self._os_access)
+
+                elif isinstance(progress, pydantic_monty.FunctionSnapshot):
                     # Intercept SUBMIT to signal final output
                     if progress.function_name == "SUBMIT":
                         submit_kwargs = dict(progress.kwargs)
@@ -203,54 +198,87 @@ class MontyCodeInterpreter:
                     # Dispatch to the appropriate tool function
                     func = all_tools.get(progress.function_name)
                     if func is None:
-                        raise CodeExecutionError(
-                            f"Unknown function: {progress.function_name}"
+                        progress = progress.resume(
+                            {
+                                "exception": NameError(
+                                    f"Unknown function: {progress.function_name}"
+                                )
+                            },
+                            os=self._os_access,
                         )
+                        continue
                     try:
                         result = func(*progress.args, **progress.kwargs)
-                        # Await coroutines transparently so the sandbox
-                        # does not need to use ``await`` for async tools
-                        if inspect.iscoroutine(result):
-                            result = await result
+                        if inspect.isawaitable(result):
+                            pending_tasks[progress.call_id] = asyncio.ensure_future(
+                                result
+                            )
+                            progress = progress.resume(
+                                {"future": ...},
+                                os=self._os_access,
+                            )
+                        else:
+                            progress = progress.resume(
+                                {"return_value": result},
+                                os=self._os_access,
+                            )
                     except Exception as e:
-                        raise CodeExecutionError(
-                            f"Tool {progress.function_name} failed: {e}"
-                        ) from e
+                        progress = progress.resume(
+                            {"exception": e},
+                            os=self._os_access,
+                        )
 
-                    # Resume Monty with the resolved return value
-                    progress = progress.resume(return_value=result)
-
-                elif isinstance(progress, pydantic_monty.MontyFutureSnapshot):
+                elif isinstance(progress, pydantic_monty.FutureSnapshot):
                     # Monty needs one or more future results before it can
-                    # continue.  Await whichever finishes first, then resume.
-                    current_tasks = [
-                        pending_tasks[cid]
-                        for cid in progress.pending_call_ids
-                        if cid in pending_tasks
-                    ]
-                    done, _ = await asyncio.wait(
-                        current_tasks, return_when=asyncio.FIRST_COMPLETED,
-                    )
-                    # Collect resolved results and remove from pending
-                    results: dict[int, dict[str, Any]] = {}
-                    for task in done:
-                        cid, ext_result = task.result()
-                        results[cid] = ext_result
-                        pending_tasks.pop(cid, None)
-                    progress = progress.resume(results)  # type: ignore[arg-type]
+                    # continue. Await the requested calls together so independent
+                    # async tools can make progress concurrently.
+                    results: dict[int, pydantic_monty.ExternalResult] = {}
+                    gather_ids: list[int] = []
+                    gather_tasks: list[asyncio.Task[Any]] = []
+
+                    for cid in progress.pending_call_ids:
+                        task = pending_tasks.pop(cid, None)
+                        if task is None:
+                            results[cid] = pydantic_monty.ExternalException(
+                                exception=RuntimeError(
+                                    f"No pending task for Monty future call_id={cid}"
+                                )
+                            )
+                        else:
+                            gather_ids.append(cid)
+                            gather_tasks.append(task)
+
+                    if gather_tasks:
+                        settled = await asyncio.gather(
+                            *gather_tasks,
+                            return_exceptions=True,
+                        )
+                        for cid, outcome in zip(gather_ids, settled):
+                            if isinstance(outcome, Exception):
+                                results[cid] = pydantic_monty.ExternalException(
+                                    exception=outcome,
+                                )
+                            elif isinstance(outcome, BaseException):
+                                raise outcome
+                            else:
+                                results[cid] = pydantic_monty.ExternalReturnValue(
+                                    return_value=outcome,
+                                )
+
+                    progress = progress.resume(results, os=self._os_access)
 
                 else:
                     raise CodeExecutionError(
                         f"Unexpected Monty progress type: {type(progress).__name__}"
                     )
+        except pydantic_monty.MontyRuntimeError as e:
+            raise CodeExecutionError(str(e)) from e
         finally:
             # Cancel any outstanding async tasks on early exit (e.g. SUBMIT)
             for task in pending_tasks.values():
                 task.cancel()
             if pending_tasks:
-                await asyncio.gather(
-                    *pending_tasks.values(), return_exceptions=True
-                )
+                await asyncio.gather(*pending_tasks.values(), return_exceptions=True)
 
         # Return captured stdout or None
         return "".join(stdout_parts) if stdout_parts else None
