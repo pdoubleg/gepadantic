@@ -169,35 +169,37 @@ def calculate_classification_metrics(
     predictions: list[str], actuals: list[str], label_name: str = "survived"
 ) -> dict[str, float]:
     """Calculate precision, recall, F1, and confusion matrix for binary classification.
-    
+
     Args:
         predictions: List of predicted labels ("yes" or "no")
         actuals: List of actual labels ("yes" or "no")
         label_name: Name of the label being predicted (for display)
-    
+
     Returns:
         Dictionary containing accuracy, precision, recall, F1, and confusion matrix
     """
     # Convert to binary (1 for "yes", 0 for "no")
     y_pred = [1 if p == "yes" else 0 for p in predictions]
     y_true = [1 if a == "yes" else 0 for a in actuals]
-    
+
     # Calculate metrics
-    accuracy = sum(p == t for p, t in zip(y_pred, y_true)) / len(y_pred) if y_pred else 0.0
-    
+    accuracy = (
+        sum(p == t for p, t in zip(y_pred, y_true)) / len(y_pred) if y_pred else 0.0
+    )
+
     # Calculate precision, recall, F1 for both classes
     precision, recall, f1, support = precision_recall_fscore_support(
         y_true, y_pred, average=None, zero_division=0
     )
-    
+
     # Calculate macro averages
     precision_macro, recall_macro, f1_macro, _ = precision_recall_fscore_support(
-        y_true, y_pred, average='macro', zero_division=0
+        y_true, y_pred, average="macro", zero_division=0
     )
-    
+
     # Confusion matrix
     cm = confusion_matrix(y_true, y_pred)
-    
+
     return {
         "accuracy": accuracy,
         "precision_no": precision[0],
@@ -223,7 +225,7 @@ def print_classification_report(
     metrics: dict[str, float], title: str = "Classification Metrics"
 ) -> None:
     """Print a detailed classification report.
-    
+
     Args:
         metrics: Dictionary of metrics from calculate_classification_metrics
         title: Title for the report section
@@ -237,7 +239,7 @@ def print_classification_report(
     print(f"{'Recall (Macro)':<20} {metrics['recall_macro']:<15.3f}")
     print(f"{'F1-Score (Macro)':<20} {metrics['f1_macro']:<15.3f}")
     print("-" * 50)
-    
+
     # Print confusion matrix
     print("\nConfusion Matrix:")
     print("                 Predicted")
@@ -278,7 +280,7 @@ def survival_metric(
 
     if ground_truth is None:
         return 0.0, "No ground truth label found in metadata"
-    
+
     # Determine confusion matrix outcome
     is_positive_prediction = predicted_survival == "yes"
     is_positive_ground_truth = ground_truth == "yes"
@@ -293,27 +295,26 @@ def survival_metric(
         # Bonus for high confidence on correct predictions
         score = 0.7 + (0.3 * confidence)
         feedback = f"✅ True Positive: predicted '{predicted_survival}', actual '{ground_truth}' (confidence: {confidence:.2f}).\n"
-        
+
     elif FN:
         score = 0.3 * (1 - confidence)
         feedback = f"❌ False Negative: predicted '{predicted_survival}', but actual was '{ground_truth}' (confidence: {confidence:.2f}).\n"
         feedback += f"Your reasoning: {reasoning}"
         feedback += "\nReflect on what aspects of prior reasoning might have led to this error, and how we can improve prediction recall."
         feedback += f"\nPrior reasoning: {reasoning}"
-        
+
     elif FP:
         score = 0.3 * (1 - confidence)
         feedback = f"⚠️ False Positive: predicted '{predicted_survival}', but actual was '{ground_truth}' (confidence: {confidence:.2f}).\n"
         feedback += f"Your reasoning: {reasoning}"
         feedback += "\nReflect on what aspects of prior reasoning might have led to this error, and how we can improve prediction precision."
         feedback += f"\nPrior reasoning: {reasoning}"
-        
+
     elif TN:
         score = 0.7 + (0.3 * confidence)
         feedback = f"✅ True Negative: predicted '{predicted_survival}', actual '{ground_truth}' (confidence: {confidence:.2f}).\n"
 
     return score, feedback
-
 
 
 # Step 5: Main optimization pipeline
@@ -323,46 +324,59 @@ def main():
     print("\n" + "=" * 70)
     print("DATASET PREPARATION")
     print("=" * 70)
-    
+
     # First, load the raw dataset to show original distribution before sampling
     # This helps users understand the baseline class distribution and sample size
     print("\n📊 Loading Raw Titanic Dataset...")
     try:
         import seaborn as sns
+
         df_raw = sns.load_dataset("titanic")
-        
+
         # Clean the data the same way as in load_titanic_data
         df_clean = df_raw[
             ["pclass", "sex", "age", "sibsp", "parch", "fare", "embarked", "survived"]
         ].copy()
         df_clean = df_clean.dropna(subset=["age", "fare"])
-        
+
         # Show raw dataset statistics
         total_raw = len(df_clean)
         raw_survived_counts = df_clean["survived"].value_counts().sort_index()
-        
+
         print("\n📈 Raw Dataset (after removing missing age/fare):")
         print(f"   └─ Total Passengers: {total_raw}")
-        print(f"   └─ Survived=0 (Died): {raw_survived_counts.get(0, 0)} ({raw_survived_counts.get(0, 0)/total_raw:.1%})")
-        print(f"   └─ Survived=1 (Lived): {raw_survived_counts.get(1, 0)} ({raw_survived_counts.get(1, 0)/total_raw:.1%})")
-        print(f"   └─ Class Balance Ratio: {raw_survived_counts.get(1, 0)/raw_survived_counts.get(0, 1):.2f}:1 (survived:died)")
-        
+        print(
+            f"   └─ Survived=0 (Died): {raw_survived_counts.get(0, 0)} ({raw_survived_counts.get(0, 0) / total_raw:.1%})"
+        )
+        print(
+            f"   └─ Survived=1 (Lived): {raw_survived_counts.get(1, 0)} ({raw_survived_counts.get(1, 0) / total_raw:.1%})"
+        )
+        print(
+            f"   └─ Class Balance Ratio: {raw_survived_counts.get(1, 0) / raw_survived_counts.get(0, 1):.2f}:1 (survived:died)"
+        )
+
     except Exception as e:
         print(f"   ⚠️  Could not load raw dataset: {e}")
-    
+
     print("\n" + "-" * 70)
 
     # Load the data with train/holdout split - now returns datasets directly
     n_train = 20
     n_holdout = 20
-    train_dataset, holdout_dataset = load_titanic_data(n_train=n_train, n_holdout=n_holdout)
+    train_dataset, holdout_dataset = load_titanic_data(
+        n_train=n_train, n_holdout=n_holdout
+    )
 
     # Calculate total dataset size
     total_samples = len(train_dataset) + len(holdout_dataset)
-    
+
     print(f"\n📊 Sampled Subset for This Run: {total_samples} passengers")
-    print(f"   └─ Training Pool: {len(train_dataset)} ({len(train_dataset)/total_samples:.1%})")
-    print(f"   └─ Holdout Test: {len(holdout_dataset)} ({len(holdout_dataset)/total_samples:.1%})")
+    print(
+        f"   └─ Training Pool: {len(train_dataset)} ({len(train_dataset) / total_samples:.1%})"
+    )
+    print(
+        f"   └─ Holdout Test: {len(holdout_dataset)} ({len(holdout_dataset) / total_samples:.1%})"
+    )
     print("   └─ Sampling Strategy: Stratified (maintains class balance)")
 
     # Show survival statistics for training pool
@@ -380,12 +394,12 @@ def main():
     print("\n📈 Training Pool Class Distribution:")
     for label in sorted(train_survival_counts.keys()):
         count = train_survival_counts[label]
-        print(f"   └─ Survived={label}: {count} ({count/len(train_dataset):.1%})")
-    
+        print(f"   └─ Survived={label}: {count} ({count / len(train_dataset):.1%})")
+
     print("\n📈 Holdout Test Class Distribution:")
     for label in sorted(holdout_survival_counts.keys()):
         count = holdout_survival_counts[label]
-        print(f"   └─ Survived={label}: {count} ({count/len(holdout_dataset):.1%})")
+        print(f"   └─ Survived={label}: {count} ({count / len(holdout_dataset):.1%})")
 
     # Split the training dataset into train/val using our helper
     train_ratio = 0.50
@@ -394,32 +408,35 @@ def main():
     )
 
     print(f"\n🔀 Training Pool Split (ratio={train_ratio}):")
-    print(f"   └─ Training Set: {len(trainset)} ({len(trainset)/len(train_dataset):.1%})")
-    print(f"   └─ Validation Set: {len(valset)} ({len(valset)/len(train_dataset):.1%})")
-    
+    print(
+        f"   └─ Training Set: {len(trainset)} ({len(trainset) / len(train_dataset):.1%})"
+    )
+    print(
+        f"   └─ Validation Set: {len(valset)} ({len(valset) / len(train_dataset):.1%})"
+    )
+
     # Calculate split class distributions
     train_split_counts = {}
     for data_inst in trainset:
         label = data_inst.metadata.get("label")
         train_split_counts[label] = train_split_counts.get(label, 0) + 1
-    
+
     val_split_counts = {}
     for data_inst in valset:
         label = data_inst.metadata.get("label")
         val_split_counts[label] = val_split_counts.get(label, 0) + 1
-    
+
     print("\n   Training Set Distribution:")
     for label in sorted(train_split_counts.keys()):
         count = train_split_counts[label]
-        print(f"      └─ Survived={label}: {count} ({count/len(trainset):.1%})")
-    
+        print(f"      └─ Survived={label}: {count} ({count / len(trainset):.1%})")
+
     print("\n   Validation Set Distribution:")
     for label in sorted(val_split_counts.keys()):
         count = val_split_counts[label]
-        print(f"      └─ Survived={label}: {count} ({count/len(valset):.1%})")
-    
+        print(f"      └─ Survived={label}: {count} ({count / len(valset):.1%})")
+
     print("=" * 70)
-    
 
     # Configure the optimization
     reflection_model = "gpt-5-mini"
@@ -442,7 +459,7 @@ def main():
         # Optimization parameters
         module_selector="all",
         candidate_selection_strategy="pareto",
-        optimize_tools=True,
+        optimize_output=True,
         use_merge=True,
         # LLM for reflection
         reflection_model=reflection_model,
@@ -468,14 +485,19 @@ def main():
     print(f"   └─ Reflection Model: {config.reflection_model}")
     print("\n📚 Dataset Configuration:")
     print(f"   └─ Training Set: {len(config.trainset)} passengers")
-    print(f"   └─ Validation Set: {len(config.valset) if config.valset else 0} passengers")
-    print(f"   └─ Holdout Test: {len(holdout_dataset)} passengers (for final evaluation)")
+    print(
+        f"   └─ Validation Set: {len(config.valset) if config.valset else 0} passengers"
+    )
+    print(
+        f"   └─ Holdout Test: {len(holdout_dataset)} passengers (for final evaluation)"
+    )
     print("\n⚙️  Optimization Settings:")
     print(f"   └─ Max Full Evaluations: {config.max_full_evals}")
     print(f"   └─ Max Metric Calls: {config.estimated_metric_calls}")
     print(f"   └─ Module Selector: {config.module_selector}")
     print(f"   └─ Candidate Selection: {config.candidate_selection_strategy}")
     print(f"   └─ Optimize Tools: {config.optimize_tools}")
+    print(f"   └─ Optimize Output: {config.optimize_output}")
     print(f"   └─ Use Merge: {config.use_merge}")
     print(f"   └─ Cache Enabled: {config.enable_cache}")
     print("=" * 70 + "\n")
@@ -484,7 +506,9 @@ def main():
     print("\n" + "=" * 70)
     print("PRE-OPTIMIZATION BASELINE EVALUATION")
     print("=" * 70)
-    print(f"\nEvaluating baseline agent on holdout set ({len(holdout_dataset)} passengers)...")
+    print(
+        f"\nEvaluating baseline agent on holdout set ({len(holdout_dataset)} passengers)..."
+    )
     baseline_correct_predictions = 0
     baseline_total_predictions = 0
     baseline_results_table = []
@@ -536,8 +560,10 @@ def main():
     # Calculate baseline classification metrics
     baseline_predictions = [row["predicted"] for row in baseline_results_table]
     baseline_actuals = [row["actual"] for row in baseline_results_table]
-    baseline_metrics = calculate_classification_metrics(baseline_predictions, baseline_actuals)
-    
+    baseline_metrics = calculate_classification_metrics(
+        baseline_predictions, baseline_actuals
+    )
+
     # Print baseline results
     print("\n📋 Baseline Prediction Details:")
     print("-" * 100)
@@ -556,7 +582,7 @@ def main():
         f"📊 BASELINE ACCURACY: {baseline_accuracy:.2%} ({baseline_correct_predictions}/{baseline_total_predictions})"
     )
     print("-" * 100)
-    
+
     # Print detailed classification metrics
     print_classification_report(baseline_metrics, "📊 Baseline Classification Report")
     print("=" * 70 + "\n")
@@ -565,39 +591,43 @@ def main():
     print("=" * 70)
     print("RUNNING GEPA OPTIMIZATION")
     print("=" * 70 + "\n")
-    
+
     result = run_optimization_pipeline(config)
 
     # Display results
     print("\n" + "=" * 70)
     print("OPTIMIZATION RESULTS")
     print("=" * 70)
-    
+
     print("\n📈 Performance Metrics:")
     print(f"   └─ Best Validation Score: {result.best_score:.4f}")
-    
+
     if result.original_score is not None:
         print(f"   └─ Original Validation Score: {result.original_score:.4f}")
         improvement = result.improvement_ratio()
         if improvement is not None:
-            improvement_symbol = "📈" if improvement > 0 else "📉" if improvement < 0 else "➡️"
+            improvement_symbol = (
+                "📈" if improvement > 0 else "📉" if improvement < 0 else "➡️"
+            )
             print(f"   └─ {improvement_symbol} Improvement: {improvement:+.2%}")
 
     print("\n🔄 Optimization Statistics:")
     print(f"   └─ Iterations Completed: {result.num_iterations}")
     print(f"   └─ Metric Evaluations: {result.num_metric_calls}")
-    
+
     print("\n💰 GEPA Token Usage:")
     print(f"   └─ Input Tokens: {result.gepa_usage.input_tokens:,}")
     print(f"   └─ Output Tokens: {result.gepa_usage.output_tokens:,}")
-    print(f"   └─ Total Tokens: {result.gepa_usage.input_tokens + result.gepa_usage.output_tokens:,}")
+    print(
+        f"   └─ Total Tokens: {result.gepa_usage.input_tokens + result.gepa_usage.output_tokens:,}"
+    )
     print(f"   └─ API Calls: {result.gepa_usage.requests}")
 
     print("\n🔧 Optimized Components:")
     for component_name, component_value in result.best_candidate.items():
         print(f"\n   {component_name}:")
         # Indent the component value
-        for line in str(component_value).split('\n'):
+        for line in str(component_value).split("\n"):
             print(f"      {line}")
 
     print("\n" + "=" * 70)
@@ -605,28 +635,36 @@ def main():
     # Check if optimization made any improvements
     improvement = result.improvement_ratio()
     has_improvement = improvement is not None and improvement > 0
-    
+
     if not has_improvement:
         print("\n" + "=" * 70)
         print("⚠️  NO IMPROVEMENT DETECTED")
         print("=" * 70)
-        print("\nThe optimization did not find a better configuration than the baseline.")
+        print(
+            "\nThe optimization did not find a better configuration than the baseline."
+        )
         print("Skipping holdout evaluation since the model has not changed.")
-        print("\nℹ️  The baseline holdout results above represent the final performance.")
-        
+        print(
+            "\nℹ️  The baseline holdout results above represent the final performance."
+        )
+
         # Use baseline metrics as the "optimized" metrics for the summary
         optimized_accuracy = baseline_accuracy
         optimized_metrics = baseline_metrics
         optimized_predictions = baseline_predictions
         accuracy_improvement = 0.0
-        results_table = baseline_results_table  # Use baseline results for the detailed examples
-        
+        results_table = (
+            baseline_results_table  # Use baseline results for the detailed examples
+        )
+
     else:
         # Test the optimized agent on holdout set
         print("\n" + "=" * 70)
         print("POST-OPTIMIZATION HOLDOUT EVALUATION")
         print("=" * 70)
-        print(f"\nEvaluating optimized agent on holdout test set ({len(holdout_dataset)} passengers)...")
+        print(
+            f"\nEvaluating optimized agent on holdout test set ({len(holdout_dataset)} passengers)..."
+        )
 
         # Create and configure agent
         test_agent = Agent(
@@ -635,7 +673,6 @@ def main():
             output_type=SurvivalPrediction,
         )
 
-
         # Track results
         correct_predictions = 0
         total_predictions = 0
@@ -643,11 +680,10 @@ def main():
 
         # Apply optimized configuration and test on holdout set
         with result.apply_best_to(agent=test_agent, input_type=PassengerInput):
-            
             test_signature_agent = SignatureAgent(
                 test_agent,
                 input_type=PassengerInput,
-                optimize_tools=True,
+                optimize_output=True,
             )
             for i, data_inst in enumerate(holdout_dataset, 1):
                 # Input is already a PassengerInput instance
@@ -701,12 +737,18 @@ def main():
                     )
 
         # Calculate optimized classification metrics
-        optimized_predictions = [row["predicted"] for row in results_table if row["predicted"] != "ERROR"]
-        optimized_actuals = [row["actual"] for row in results_table if row["predicted"] != "ERROR"]
-        
+        optimized_predictions = [
+            row["predicted"] for row in results_table if row["predicted"] != "ERROR"
+        ]
+        optimized_actuals = [
+            row["actual"] for row in results_table if row["predicted"] != "ERROR"
+        ]
+
         if optimized_predictions:  # Only calculate if we have valid predictions
-            optimized_metrics = calculate_classification_metrics(optimized_predictions, optimized_actuals)
-        
+            optimized_metrics = calculate_classification_metrics(
+                optimized_predictions, optimized_actuals
+            )
+
         # Print results table
         print("\n📋 Optimized Agent Prediction Details:")
         print("-" * 100)
@@ -730,21 +772,29 @@ def main():
             print(
                 f"📊 OPTIMIZED ACCURACY: {optimized_accuracy:.2%} ({correct_predictions}/{total_predictions})"
             )
-            
+
             # Compare with baseline
             if baseline_total_predictions > 0:
                 accuracy_improvement = optimized_accuracy - baseline_accuracy
-                improvement_symbol = "📈" if accuracy_improvement > 0 else "📉" if accuracy_improvement < 0 else "➡️"
+                improvement_symbol = (
+                    "📈"
+                    if accuracy_improvement > 0
+                    else "📉"
+                    if accuracy_improvement < 0
+                    else "➡️"
+                )
                 print(
                     f"{improvement_symbol} IMPROVEMENT vs BASELINE: {accuracy_improvement:+.2%} "
                     f"({baseline_accuracy:.2%} → {optimized_accuracy:.2%})"
                 )
-        
+
         print("-" * 100)
-        
+
         # Print detailed classification metrics
         if optimized_predictions:
-            print_classification_report(optimized_metrics, "📊 Optimized Classification Report")
+            print_classification_report(
+                optimized_metrics, "📊 Optimized Classification Report"
+            )
 
     # Show a few detailed examples
     print("\n" + "=" * 70)
@@ -774,40 +824,65 @@ def main():
     print("=" * 70)
     print("\n📊 Dataset Configuration:")
     print(f"   └─ Total Samples: {total_samples}")
-    print(f"   └─ Training: {len(trainset)} | Validation: {len(valset)} | Holdout: {len(holdout_dataset)}")
-    
+    print(
+        f"   └─ Training: {len(trainset)} | Validation: {len(valset)} | Holdout: {len(holdout_dataset)}"
+    )
+
     if has_improvement:
         print("\n📈 Performance Comparison (Holdout Test Set):")
-        print(f"   {'Metric':<25} {'Baseline':<15} {'Optimized':<15} {'Improvement':<15}")
-        print(f"   {'-'*70}")
-        print(f"   {'Accuracy':<25} {baseline_accuracy:<15.3f} {optimized_accuracy:<15.3f} {accuracy_improvement:+.3f}")
-        
+        print(
+            f"   {'Metric':<25} {'Baseline':<15} {'Optimized':<15} {'Improvement':<15}"
+        )
+        print(f"   {'-' * 70}")
+        print(
+            f"   {'Accuracy':<25} {baseline_accuracy:<15.3f} {optimized_accuracy:<15.3f} {accuracy_improvement:+.3f}"
+        )
+
         if optimized_predictions:
             # Show comparison between baseline and optimized
-            f1_improvement = optimized_metrics['f1_macro'] - baseline_metrics['f1_macro']
-            precision_improvement = optimized_metrics['precision_macro'] - baseline_metrics['precision_macro']
-            recall_improvement = optimized_metrics['recall_macro'] - baseline_metrics['recall_macro']
-            
-            print(f"   {'Precision (Macro)':<25} {baseline_metrics['precision_macro']:<15.3f} {optimized_metrics['precision_macro']:<15.3f} {precision_improvement:+.3f}")
-            print(f"   {'Recall (Macro)':<25} {baseline_metrics['recall_macro']:<15.3f} {optimized_metrics['recall_macro']:<15.3f} {recall_improvement:+.3f}")
-            print(f"   {'F1-Score (Macro)':<25} {baseline_metrics['f1_macro']:<15.3f} {optimized_metrics['f1_macro']:<15.3f} {f1_improvement:+.3f}")
+            f1_improvement = (
+                optimized_metrics["f1_macro"] - baseline_metrics["f1_macro"]
+            )
+            precision_improvement = (
+                optimized_metrics["precision_macro"]
+                - baseline_metrics["precision_macro"]
+            )
+            recall_improvement = (
+                optimized_metrics["recall_macro"] - baseline_metrics["recall_macro"]
+            )
+
+            print(
+                f"   {'Precision (Macro)':<25} {baseline_metrics['precision_macro']:<15.3f} {optimized_metrics['precision_macro']:<15.3f} {precision_improvement:+.3f}"
+            )
+            print(
+                f"   {'Recall (Macro)':<25} {baseline_metrics['recall_macro']:<15.3f} {optimized_metrics['recall_macro']:<15.3f} {recall_improvement:+.3f}"
+            )
+            print(
+                f"   {'F1-Score (Macro)':<25} {baseline_metrics['f1_macro']:<15.3f} {optimized_metrics['f1_macro']:<15.3f} {f1_improvement:+.3f}"
+            )
     else:
         print("\n📈 Performance (Holdout Test Set - No Improvement):")
         print(f"   {'Metric':<25} {'Value':<15}")
-        print(f"   {'-'*40}")
+        print(f"   {'-' * 40}")
         print(f"   {'Accuracy':<25} {baseline_accuracy:<15.3f}")
-        
+
         if optimized_predictions:
             # Show only baseline metrics (no comparison)
-            print(f"   {'Precision (Macro)':<25} {baseline_metrics['precision_macro']:<15.3f}")
-            print(f"   {'Recall (Macro)':<25} {baseline_metrics['recall_macro']:<15.3f}")
+            print(
+                f"   {'Precision (Macro)':<25} {baseline_metrics['precision_macro']:<15.3f}"
+            )
+            print(
+                f"   {'Recall (Macro)':<25} {baseline_metrics['recall_macro']:<15.3f}"
+            )
             print(f"   {'F1-Score (Macro)':<25} {baseline_metrics['f1_macro']:<15.3f}")
-    
+
     print("\n💰 Optimization Cost:")
-    print(f"   └─ Total Tokens: {result.gepa_usage.input_tokens + result.gepa_usage.output_tokens:,}")
+    print(
+        f"   └─ Total Tokens: {result.gepa_usage.input_tokens + result.gepa_usage.output_tokens:,}"
+    )
     print(f"   └─ API Calls: {result.gepa_usage.requests}")
     print(f"   └─ Iterations: {result.num_iterations}")
-    
+
     print("\n" + "=" * 70)
     print("✅ EXAMPLE COMPLETE!")
     print("=" * 70 + "\n")

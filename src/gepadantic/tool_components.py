@@ -71,6 +71,10 @@ def _description_key(tool_name: str) -> str:
     return f"tool:{tool_name}:description"
 
 
+def _output_description_key(tool_name: str) -> str:
+    return f"output:{tool_name}:description"
+
+
 def _format_path(path: tuple[str, ...]) -> str:
     formatted: list[str] = []
     for segment in path:
@@ -86,6 +90,10 @@ def _format_path(path: tuple[str, ...]) -> str:
 
 def _parameter_key(tool_name: str, path: tuple[str, ...]) -> str:
     return f"tool:{tool_name}:param:{_format_path(path)}"
+
+
+def _output_parameter_key(tool_name: str, path: tuple[str, ...]) -> str:
+    return f"output:{tool_name}:param:{_format_path(path)}"
 
 
 def _iter_schema_descriptions(
@@ -156,6 +164,31 @@ def _extract_components(
     tool_defs: Iterable[ToolDefinition],
 ) -> tuple[dict[str, str], dict[str, ToolComponentInfo]]:
     """Extract component seeds and metadata from tool definitions."""
+    return _extract_components_with_keys(
+        tool_defs,
+        description_key_func=_description_key,
+        parameter_key_func=_parameter_key,
+    )
+
+
+def _extract_output_components(
+    tool_defs: Iterable[ToolDefinition],
+) -> tuple[dict[str, str], dict[str, ToolComponentInfo]]:
+    """Extract component seeds and metadata from output tool definitions."""
+    return _extract_components_with_keys(
+        tool_defs,
+        description_key_func=_output_description_key,
+        parameter_key_func=_output_parameter_key,
+    )
+
+
+def _extract_components_with_keys(
+    tool_defs: Iterable[ToolDefinition],
+    *,
+    description_key_func: Any,
+    parameter_key_func: Any,
+) -> tuple[dict[str, str], dict[str, ToolComponentInfo]]:
+    """Extract component seeds and metadata using caller-provided key builders."""
     seed_components: dict[str, str] = {}
     component_info: dict[str, ToolComponentInfo] = {}
 
@@ -164,11 +197,11 @@ def _extract_components(
         parameter_paths: dict[str, tuple[str, ...]] = {}
 
         if isinstance(tool_def.description, str) and tool_def.description.strip():
-            description_key = _description_key(tool_def.name)
+            description_key = description_key_func(tool_def.name)
             seed_components[description_key] = tool_def.description
 
         for path, desc in _iter_schema_descriptions(tool_def.parameters_json_schema):
-            key = _parameter_key(tool_def.name, path)
+            key = parameter_key_func(tool_def.name, path)
             seed_components[key] = desc
             parameter_paths[key] = path
 
@@ -321,6 +354,185 @@ class ToolOptimizationManager:
         return tool_def
 
 
+class OutputToolOptimizationManager:
+    """Manage output model component extraction and candidate application."""
+
+    def __init__(
+        self,
+        agent: AbstractAgent[Any, Any],
+        *,
+        output_type: Any | None = None,
+    ) -> None:
+        self._base_agent = _unwrap_agent(agent)
+        self._base_prepare = getattr(self._base_agent, "_prepare_output_tools", None)
+        self._candidate_var: contextvars.ContextVar[ToolCandidate | None] = (
+            contextvars.ContextVar("gepa_output_tool_candidate", default=None)
+        )
+        self._tool_components: dict[str, ToolComponentInfo] = {}
+        self._seed_components: dict[str, str] | None = None
+        self._output_types: list[Any] = []
+
+        if output_type is not None:
+            self.add_output_type(output_type)
+
+        # Install wrapper only once.
+        if getattr(self._base_agent, "_gepa_output_tool_prepare_wrapper", None) is None:
+            setattr(
+                self._base_agent,
+                "_gepa_output_tool_prepare_wrapper",
+                self._prepare_wrapper,
+            )
+            self._base_agent._prepare_output_tools = self._prepare_wrapper  # type: ignore[assignment]
+
+    def add_output_type(self, output_type: Any) -> None:
+        """Record an output type whose schema should seed output components."""
+        if all(existing is not output_type for existing in self._output_types):
+            self._output_types.append(output_type)
+        self._ingest_output_type(output_type)
+
+    def get_seed_components(self) -> dict[str, str]:
+        """Return cached seed components, collecting them if necessary."""
+        if self._seed_components is not None:
+            return dict(self._seed_components)
+
+        self._seed_components = {}
+        for output_type in self._output_types:
+            self._ingest_output_type(output_type)
+
+        if not self._seed_components:
+            tool_defs = self._collect_default_output_tool_defs()
+            self._ingest_tool_defs(tool_defs)
+
+        return dict(self._seed_components)
+
+    def get_component_keys(self) -> list[str]:
+        """Return all known output component keys."""
+        components = self.get_seed_components()
+        return list(components.keys())
+
+    @contextmanager
+    def candidate_context(self, candidate: dict[str, str] | None) -> Iterable[None]:
+        """Context manager to apply a candidate during output tool preparation."""
+        filtered = self._filter_candidate(candidate)
+        token = self._candidate_var.set(filtered)
+        try:
+            yield
+        finally:
+            self._candidate_var.reset(token)
+
+    def _filter_candidate(
+        self, candidate: dict[str, str] | None
+    ) -> ToolCandidate | None:
+        if not candidate:
+            return None
+        filtered = {
+            key: value for key, value in candidate.items() if key.startswith("output:")
+        }
+        return filtered or None
+
+    def _collect_default_output_tool_defs(self) -> list[ToolDefinition]:
+        toolset = getattr(self._base_agent, "_output_toolset", None)
+        tool_defs = (
+            getattr(toolset, "_tool_defs", None) if toolset is not None else None
+        )
+        if isinstance(tool_defs, list):
+            return list(tool_defs)
+        return []
+
+    def _collect_output_type_tool_defs(self, output_type: Any) -> list[ToolDefinition]:
+        prepare_output_schema = getattr(
+            self._base_agent, "_prepare_output_schema", None
+        )
+        if prepare_output_schema is None:
+            return []
+        try:
+            output_schema = prepare_output_schema(output_type)
+        except Exception:
+            return []
+        toolset = getattr(output_schema, "toolset", None)
+        tool_defs = (
+            getattr(toolset, "_tool_defs", None) if toolset is not None else None
+        )
+        if isinstance(tool_defs, list):
+            return list(tool_defs)
+        return []
+
+    def _ingest_output_type(self, output_type: Any) -> None:
+        self._ingest_tool_defs(self._collect_output_type_tool_defs(output_type))
+
+    def _ingest_tool_defs(self, tool_defs: Iterable[ToolDefinition]) -> None:
+        seed_components, component_info = _extract_output_components(tool_defs)
+        if self._seed_components is None:
+            self._seed_components = {}
+        for key, value in seed_components.items():
+            self._seed_components.setdefault(key, value)
+        self._tool_components.update(component_info)
+
+    async def _prepare_wrapper(
+        self, ctx: RunContext[Any], tool_defs: list[ToolDefinition]
+    ) -> list[ToolDefinition] | None:
+        prepared = tool_defs
+        if self._base_prepare:
+            prepared_result = await self._base_prepare(ctx, tool_defs)
+            if prepared_result is None:
+                return None
+            prepared = prepared_result
+
+        self._ingest_tool_defs(prepared)
+
+        candidate = self._candidate_var.get()
+        if not candidate:
+            return prepared
+
+        modified: list[ToolDefinition] = []
+        changed = False
+        for tool_def in prepared:
+            new_def = self._apply_candidate_to_tool(tool_def, candidate)
+            if new_def is not tool_def:
+                changed = True
+            modified.append(new_def)
+
+        return modified if changed else prepared
+
+    def _apply_candidate_to_tool(
+        self, tool_def: ToolDefinition, candidate: ToolCandidate
+    ) -> ToolDefinition:
+        info = self._tool_components.get(tool_def.name)
+        if not info:
+            return tool_def
+
+        updates: dict[str, Any] = {}
+
+        if info.description_key:
+            raw_value = candidate.get(info.description_key)
+            if raw_value is not None:
+                new_description = str(raw_value)
+                if tool_def.description != new_description:
+                    updates["description"] = new_description
+
+        schema_copy: dict[str, Any] | None = None
+        schema_changed = False
+
+        for key, path in info.parameter_paths.items():
+            if key not in candidate:
+                continue
+            raw_value = candidate[key]
+            if raw_value is None:
+                continue
+            new_description = str(raw_value)
+            if schema_copy is None:
+                schema_copy = deepcopy(tool_def.parameters_json_schema)
+            if _set_schema_description(schema_copy, path, new_description):
+                schema_changed = True
+
+        if schema_changed and schema_copy is not None:
+            updates["parameters_json_schema"] = schema_copy
+
+        if updates:
+            return replace(tool_def, **updates)
+        return tool_def
+
+
 def get_tool_optimizer(
     agent: AbstractAgent[Any, Any],
 ) -> ToolOptimizationManager | None:
@@ -343,4 +555,33 @@ def get_or_create_tool_optimizer(
 
     manager = ToolOptimizationManager(base_agent)
     setattr(base_agent, "_gepa_tool_optimizer", manager)
+    return manager
+
+
+def get_output_tool_optimizer(
+    agent: AbstractAgent[Any, Any],
+) -> OutputToolOptimizationManager | None:
+    """Return the installed output tool optimization manager for an agent, if any."""
+    base_agent = _unwrap_agent(agent)
+    manager = getattr(base_agent, "_gepa_output_tool_optimizer", None)
+    if isinstance(manager, OutputToolOptimizationManager):
+        return manager
+    return None
+
+
+def get_or_create_output_tool_optimizer(
+    agent: AbstractAgent[Any, Any],
+    *,
+    output_type: Any | None = None,
+) -> OutputToolOptimizationManager:
+    """Retrieve or attach an output tool optimization manager to an agent."""
+    base_agent = _unwrap_agent(agent)
+    manager = getattr(base_agent, "_gepa_output_tool_optimizer", None)
+    if isinstance(manager, OutputToolOptimizationManager):
+        if output_type is not None:
+            manager.add_output_type(output_type)
+        return manager
+
+    manager = OutputToolOptimizationManager(base_agent, output_type=output_type)
+    setattr(base_agent, "_gepa_output_tool_optimizer", manager)
     return manager

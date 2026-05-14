@@ -578,6 +578,7 @@ signature_agent: SignatureAgent[None, MathProblemOutput] = SignatureAgent(
     agent,
     input_type=MathProblemInput,
     optimize_tools=True,
+    optimize_output=True,
 )
 
 
@@ -677,6 +678,7 @@ def main():
         module_selector="all",
         candidate_selection_strategy="pareto",
         optimize_tools=True,
+        optimize_output=True,
         use_merge=True,
         # LLM for reflection
         reflection_model=reflection_model,
@@ -713,6 +715,7 @@ def main():
         agent,
         input_type=MathProblemInput,
         optimize_tools=True,
+        optimize_output=True,
     )
 
     for test_case in holdout_dataset:
@@ -728,10 +731,10 @@ def main():
             result=test_result.output,
             error_message=None,
         )
-        
+
         # Evaluate with metric
         score, feedback = metric(test_case, rollout_output)
-        
+
         is_correct = score >= 0.99  # Consider score >= 0.99 as correct
         if is_correct:
             baseline_correct += 1
@@ -766,7 +769,9 @@ def main():
     baseline_accuracy = (
         baseline_correct / len(holdout_dataset) if holdout_dataset else 0
     )
-    print(f"Baseline Accuracy: {baseline_accuracy:.2%} ({baseline_correct}/{len(holdout_dataset)})")
+    print(
+        f"Baseline Accuracy: {baseline_accuracy:.2%} ({baseline_correct}/{len(holdout_dataset)})"
+    )
     print("-" * 100)
 
     # Run the optimization
@@ -806,6 +811,7 @@ def main():
         agent,
         input_type=MathProblemInput,
         optimize_tools=True,
+        optimize_output=True,
     )
 
     # Track results
@@ -828,10 +834,10 @@ def main():
                     result=test_result.output,
                     error_message=None,
                 )
-                
+
                 # Evaluate with metric
                 score, feedback = metric(test_case, rollout_output)
-                
+
                 is_correct = score >= 0.99  # Consider score >= 0.99 as correct
                 if is_correct:
                     correct += 1
@@ -890,14 +896,20 @@ def main():
     # Calculate and display metrics
     if len(holdout_dataset) > 0:
         accuracy = correct / len(holdout_dataset)
-        print(f"\n📊 Optimized Accuracy: {accuracy:.2%} ({correct}/{len(holdout_dataset)})")
-        print(f"📊 Baseline Accuracy: {baseline_accuracy:.2%} ({baseline_correct}/{len(holdout_dataset)})")
-        
+        print(
+            f"\n📊 Optimized Accuracy: {accuracy:.2%} ({correct}/{len(holdout_dataset)})"
+        )
+        print(
+            f"📊 Baseline Accuracy: {baseline_accuracy:.2%} ({baseline_correct}/{len(holdout_dataset)})"
+        )
+
         # Show improvement over baseline
         accuracy_diff = accuracy - baseline_accuracy
         if baseline_accuracy > 0:
             accuracy_improvement = accuracy_diff / baseline_accuracy
-            print(f"📈 Improvement: {accuracy_improvement:+.2%} ({accuracy_diff:+.2%} absolute)")
+            print(
+                f"📈 Improvement: {accuracy_improvement:+.2%} ({accuracy_diff:+.2%} absolute)"
+            )
         else:
             print(f"📈 Improvement: {accuracy_diff:+.2%} (absolute)")
 

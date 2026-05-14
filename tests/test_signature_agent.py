@@ -406,6 +406,45 @@ def _build_formatter_agent() -> SignatureAgent[Any, str]:
     )
 
 
+def _build_formatter_agent_with_output(
+    *,
+    optimize_tools: bool,
+    optimize_output: bool,
+) -> SignatureAgent[Any, GeographyAnswer]:
+    test_model = TestModel(
+        custom_output_args=GeographyAnswer(
+            answer="Done",
+            confidence="high",
+            sources=[],
+        )
+    )
+    agent = Agent(
+        test_model,
+        instructions="You format copy with precision.",
+        output_type=GeographyAnswer,
+        name="formatter",
+    )
+
+    @agent.tool_plain
+    def format_text(text: str, style: str) -> str:
+        """Format content for downstream processing.
+
+        Args:
+            text: Raw text to format.
+            style: Formatting instructions to apply.
+        """
+
+        return f"{style}:{text}"
+
+    return SignatureAgent(
+        agent,
+        input_type=FormatRequest,
+        output_type=GeographyAnswer,
+        optimize_tools=optimize_tools,
+        optimize_output=optimize_output,
+    )
+
+
 def test_signature_agent_tool_components_seed():
     """Tool components are exposed when optimization is enabled."""
     signature_agent = _build_formatter_agent()
@@ -429,6 +468,33 @@ def test_signature_agent_tool_components_seed():
             "tool:format_text:param:style",
         ]
     )
+
+
+def test_signature_agent_tool_and_output_components_are_separate():
+    """Function tools and output model components are independently exposed."""
+    tools_only = _build_formatter_agent_with_output(
+        optimize_tools=True,
+        optimize_output=False,
+    )
+    tools_seed = extract_seed_candidate(tools_only)
+    assert "tool:format_text:description" in tools_seed
+    assert "output:final_result:description" not in tools_seed
+    assert all(not key.startswith("output:") for key in get_component_names(tools_only))
+
+    output_only = _build_formatter_agent_with_output(
+        optimize_tools=False,
+        optimize_output=True,
+    )
+    output_seed = extract_seed_candidate(output_only)
+    assert "tool:format_text:description" not in output_seed
+    assert (
+        output_seed["output:final_result:description"]
+        == "Answer to a geography question."
+    )
+    assert (
+        output_seed["output:final_result:param:answer"] == "The answer to the question"
+    )
+    assert all(not key.startswith("tool:") for key in get_component_names(output_only))
 
 
 def test_signature_agent_tool_candidate_modifies_definitions():
@@ -585,6 +651,38 @@ def test_signature_agent_tool_candidate_modifies_definitions():
             )
         ]
     )
+
+
+def test_signature_agent_output_candidate_modifies_output_definitions():
+    """Output candidates modify structured output tool definitions only."""
+    signature_agent = _build_formatter_agent_with_output(
+        optimize_tools=False,
+        optimize_output=True,
+    )
+    test_model = signature_agent.wrapped.model
+    assert isinstance(test_model, TestModel)
+
+    sig = FormatRequest(text="hello", style="formal")
+
+    candidate = {
+        "output:final_result:description": "Return a polished geography answer.",
+        "output:final_result:param:answer": "Final answer text for the user.",
+        "tool:format_text:description": "This should not affect function tools.",
+    }
+
+    _ = signature_agent.run_signature_sync(sig, candidate=candidate)
+
+    request_params = test_model.last_model_request_parameters
+    assert request_params is not None
+    output_defs = request_params.output_tools
+    assert output_defs[0].description == "Return a polished geography answer."
+    assert (
+        output_defs[0].parameters_json_schema["properties"]["answer"]["description"]
+        == "Final answer text for the user."
+    )
+
+    function_defs = request_params.function_tools
+    assert function_defs[0].description == "Format content for downstream processing."
 
 
 def test_signature_agent_with_str_input_type():

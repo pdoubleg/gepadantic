@@ -387,7 +387,7 @@ def evaluate_agent_on_testset(
 # Step 7: Main optimization pipeline
 def main():
     """Run the GEPA optimization for Facility Support Analyzer."""
-    
+
     SAMPLE_SIZE = 30
 
     print("\n" + "=" * 70)
@@ -397,7 +397,7 @@ def main():
     # Load the full dataset
     full_dataset = load_facility_support_data()
     full_dataset = full_dataset[:SAMPLE_SIZE]
-    
+
     print("\n📊 Dataset Statistics:")
     print(f"   └─ Total Examples: {len(full_dataset)}")
 
@@ -415,9 +415,13 @@ def main():
     test_set = full_dataset[train_size + val_size :]
 
     print("\n🔀 Dataset Split:")
-    print(f"   └─ Training Set: {len(train_set)} ({len(train_set)/len(full_dataset):.1%})")
-    print(f"   └─ Validation Set: {len(val_set)} ({len(val_set)/len(full_dataset):.1%})")
-    print(f"   └─ Test Set: {len(test_set)} ({len(test_set)/len(full_dataset):.1%})")
+    print(
+        f"   └─ Training Set: {len(train_set)} ({len(train_set) / len(full_dataset):.1%})"
+    )
+    print(
+        f"   └─ Validation Set: {len(val_set)} ({len(val_set) / len(full_dataset):.1%})"
+    )
+    print(f"   └─ Test Set: {len(test_set)} ({len(test_set) / len(full_dataset):.1%})")
 
     # Show sample email
     print("\n📧 Sample Email (Training Set):")
@@ -451,7 +455,7 @@ Read the following facility support request and analyze it to determine the urge
         # Optimization parameters
         module_selector="all",
         candidate_selection_strategy="pareto",
-        optimize_tools=True,
+        optimize_output=True,
         use_merge=False,
         # LLM for reflection
         reflection_model=reflection_model,
@@ -475,9 +479,7 @@ Read the following facility support request and analyze it to determine the urge
     print(f"   └─ Reflection Model: {config.reflection_model}")
     print("\n📚 Dataset Configuration:")
     print(f"   └─ Training Set: {len(config.trainset)} emails")
-    print(
-        f"   └─ Validation Set: {len(config.valset) if config.valset else 0} emails"
-    )
+    print(f"   └─ Validation Set: {len(config.valset) if config.valset else 0} emails")
     print(f"   └─ Test Set: {len(test_set)} emails (for final evaluation)")
     print("\n⚙️  Optimization Settings:")
     print(f"   └─ Max Full Evaluations: {config.max_full_evals}")
@@ -485,6 +487,7 @@ Read the following facility support request and analyze it to determine the urge
     print(f"   └─ Module Selector: {config.module_selector}")
     print(f"   └─ Candidate Selection: {config.candidate_selection_strategy}")
     print(f"   └─ Optimize Tools: {config.optimize_tools}")
+    print(f"   └─ Optimize Output: {config.optimize_output}")
     print(f"   └─ Use Merge: {config.use_merge}")
     print(f"   └─ Cache Enabled: {config.enable_cache}")
     print("=" * 70 + "\n")
@@ -591,7 +594,9 @@ Read the following facility support request and analyze it to determine the urge
         print("\n" + "=" * 70)
         print("⚠️  NO IMPROVEMENT DETECTED")
         print("=" * 70)
-        print("\nThe optimization did not find a better configuration than the baseline.")
+        print(
+            "\nThe optimization did not find a better configuration than the baseline."
+        )
         print("Skipping post-optimization evaluation since the model has not changed.")
         print("\nℹ️  The baseline test results above represent the final performance.")
 
@@ -616,7 +621,7 @@ Read the following facility support request and analyze it to determine the urge
             optimized_agent = SignatureAgent(
                 optimized_agent_obj,
                 input_type=EmailInput,
-                optimize_tools=True,
+                optimize_output=True,
             )
 
             optimized_results = evaluate_agent_on_testset(
@@ -628,7 +633,9 @@ Read the following facility support request and analyze it to determine the urge
         print(f"{'Metric':<30} {'Score':<15}")
         print("-" * 70)
         print(f"{'Overall Score':<30} {optimized_results['mean_score']:<15.3f}")
-        print(f"{'Urgency Accuracy':<30} {optimized_results['urgency_accuracy']:<15.3f}")
+        print(
+            f"{'Urgency Accuracy':<30} {optimized_results['urgency_accuracy']:<15.3f}"
+        )
         print(
             f"{'Sentiment Accuracy':<30} {optimized_results['sentiment_accuracy']:<15.3f}"
         )
@@ -663,8 +670,10 @@ Read the following facility support request and analyze it to determine the urge
 
     if has_improvement:
         print("\n📈 Performance Comparison (Test Set):")
-        print(f"   {'Metric':<30} {'Baseline':<15} {'Optimized':<15} {'Improvement':<15}")
-        print(f"   {'-'*75}")
+        print(
+            f"   {'Metric':<30} {'Baseline':<15} {'Optimized':<15} {'Improvement':<15}"
+        )
+        print(f"   {'-' * 75}")
         print(
             f"   {'Overall Score':<30} {baseline_results['mean_score']:<15.3f} {optimized_results['mean_score']:<15.3f} {optimized_results['mean_score'] - baseline_results['mean_score']:+.3f}"
         )
@@ -680,9 +689,11 @@ Read the following facility support request and analyze it to determine the urge
     else:
         print("\n📈 Performance (Test Set - No Improvement):")
         print(f"   {'Metric':<30} {'Value':<15}")
-        print(f"   {'-'*45}")
+        print(f"   {'-' * 45}")
         print(f"   {'Overall Score':<30} {baseline_results['mean_score']:<15.3f}")
-        print(f"   {'Urgency Accuracy':<30} {baseline_results['urgency_accuracy']:<15.3f}")
+        print(
+            f"   {'Urgency Accuracy':<30} {baseline_results['urgency_accuracy']:<15.3f}"
+        )
         print(
             f"   {'Sentiment Accuracy':<30} {baseline_results['sentiment_accuracy']:<15.3f}"
         )
@@ -707,4 +718,3 @@ Read the following facility support request and analyze it to determine the urge
 if __name__ == "__main__":
     # Run the example
     result = main()
-

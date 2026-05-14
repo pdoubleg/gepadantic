@@ -51,18 +51,18 @@ class GepaConfig:
 
         class MyInput(BaseModel):
                 text: str = Field(description="Input text")
-                
+
         class MyOutput(BaseModel):
             category: str = Field(description="Classification category")
-            
+
         def my_metric(data_inst, output):
             if output.success and output.result:
                 return 1.0 if output.result.category == data_inst.metadata["label"] else 0.0, None
             return 0.0, "Failed to produce output"
-            
+
         # Split dataset into train and validation
         trainset, valset = split_dataset(dataset, train_ratio=0.7)
-        
+
         config = GepaConfig(
             agent_model="gpt-4.1-nano",
             reflection_model="gpt-4.1",
@@ -117,9 +117,12 @@ class GepaConfig:
     max_metric_calls: int | None = None
     """Maximum number of metric evaluations (budget)."""
 
-    # Optimize tools (e.g., output model schema text components)
-    optimize_tools: bool = True
-    """Whether to optimize tool descriptions (default: True)."""
+    # Tool and output schema optimization
+    optimize_tools: bool = False
+    """Whether to optimize function tool descriptions and parameter schemas (default: False)."""
+
+    optimize_output: bool = True
+    """Whether to optimize output model descriptions and field schemas (default: True)."""
 
     # Optimization parameters
     seed_candidate: dict[str, str] | None = None
@@ -224,7 +227,9 @@ class GepaConfig:
             f"auto={self.auto}."
         )
         # Validate that exactly one of agent or agent_model is set
-        assert (self.signature_agent is not None) + (self.agent_model is not None) == 1, (
+        assert (self.signature_agent is not None) + (
+            self.agent_model is not None
+        ) == 1, (
             "Exactly one of signature_agent or agent_model must be set. "
             f"You set signature_agent={self.signature_agent}, "
             f"agent_model={self.agent_model}."
@@ -302,35 +307,42 @@ def run_optimization_pipeline(config: GepaConfig) -> GepaOptimizationResult:
             instructions=config.agent_instructions,
             output_type=config.output_type,
         )
-        
+
         # Determine input_type for SignatureAgent
         # Can be: BaseModel subclass, str, or None
         if config.input_type is not None:
             if config.input_type is str:
                 sig_input_type = str
-            elif isinstance(config.input_type, type) and issubclass(config.input_type, BaseModel):
+            elif isinstance(config.input_type, type) and issubclass(
+                config.input_type, BaseModel
+            ):
                 sig_input_type = config.input_type
             else:
-                raise ValueError(f"Invalid input_type: {config.input_type}. Must be a BaseModel subclass, str, or None.")
+                raise ValueError(
+                    f"Invalid input_type: {config.input_type}. Must be a BaseModel subclass, str, or None."
+                )
         else:
             sig_input_type = None
-            
+
         signature_agent = SignatureAgent(
             agent,
             input_type=sig_input_type,
             optimize_tools=config.optimize_tools,
+            optimize_output=config.optimize_output,
         )
 
     # Run optimization
     print("Starting GEPA optimization...")
-    
+
     # Determine input_type for optimization
     # Only pass BaseModel types to optimize_agent_prompts, not str or None
     opt_input_type = None
     if config.input_type is not None and config.input_type is not str:
-        if isinstance(config.input_type, type) and issubclass(config.input_type, BaseModel):
+        if isinstance(config.input_type, type) and issubclass(
+            config.input_type, BaseModel
+        ):
             opt_input_type = config.input_type
-    
+
     result = optimize_agent_prompts(
         signature_agent=signature_agent,
         seed_candidate=config.seed_candidate,

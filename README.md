@@ -65,7 +65,7 @@ Orchestrates the GEPA optimization pipeline. Runs iterative prompt evolution usi
 from gepadantic import optimize_agent_prompts
 
 result = optimize_agent_prompts(
-    agent=signature_agent,
+    signature_agent=signature_agent,
     trainset=train_data,
     valset=val_data,
     metric=metric_fn,
@@ -93,7 +93,8 @@ config = GepaConfig(
     valset=val_data,
     metric=metric_fn,
     auto="medium",  # light, medium, or heavy
-    optimize_tools=True,
+    optimize_output=True,  # Optimize output model descriptions and fields
+    optimize_tools=False,  # Set True when optimizing function tool descriptions
 )
 
 result = run_optimization_pipeline(config)
@@ -149,6 +150,15 @@ Here's an example from optimizing a math problem solver. GEPA improved the score
 ```
 
 GEPA discovered that emphasizing "algebraic simplifications" and "exact answers" improved performance on the validation set.
+
+## Tool vs Output Optimization
+
+GEPAdantic separates two prompt surfaces that pydantic-ai represents as tools internally:
+
+- `optimize_tools=True` exposes function tool descriptions and parameter descriptions as `tool:*` components.
+- `optimize_output=True` exposes structured output model descriptions and field descriptions as `output:*` components.
+
+Use `optimize_output=True` when you want GEPA to refine the response schema, even if your agent has no callable tools. Use both flags when an agent has function tools and a structured output model.
 
 ## Quick Start
 

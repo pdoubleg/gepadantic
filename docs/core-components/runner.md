@@ -16,7 +16,7 @@ The `runner` module provides a **lower-level interface** for GEPA optimization. 
 
 The `optimize_agent_prompts` function is the main entry point for low-level optimization. Its core responsibility is to **prepare inputs for `gepa.api.optimize`** by:
 
-1. **Extracting the seed candidate** - Pulls the initial prompts from your agent and optional signature
+1. **Extracting the seed candidate** - Pulls the initial prompts from your agent, optional signature, enabled function tools, and enabled output schema
 2. **Creating the adapter** - Wraps your agent, metric, and input specification in a `PydanticAIGEPAAdapter`
 3. **Configuring the reflection language model** - Sets up the LM used to propose new prompts
 4. **Managing caching** - Optionally creates a `CacheManager` for resumable optimization
@@ -48,7 +48,7 @@ def metric(data_inst, output):
     feedback = "Correct!" if score == 1.0 else "Incorrect answer."
     return score, feedback
 
-# Optimize - will optimize system_prompt, instructions, and field descriptions
+# Optimize - will optimize instructions and input field descriptions
 result = optimize_agent_prompts(
     agent=agent,
     trainset=trainset,
@@ -75,6 +75,19 @@ with result.apply_best(agent):
 
 - **`input_type`**: Optional `InputSpec` for optimizing structured input field descriptions alongside agent prompts
 - **`seed_candidate`**: Optional initial prompts (extracted from agent by default)
+
+### Tool and Output Components
+
+`optimize_agent_prompts()` does not take separate tool flags directly. Enable them on the `SignatureAgent` before calling the runner:
+
+```python
+agent = SignatureAgent(
+    base_agent,
+    input_type=QueryInput,
+    optimize_tools=True,   # Function tool descriptions -> tool:* components
+    optimize_output=True,  # Output model descriptions -> output:* components
+)
+```
 
 ### Budget Control
 
@@ -195,7 +208,7 @@ def metric(data_inst, output):
 trainset = [MathProblem(problem="2+2=?", expected=4), ...]
 valset = [MathProblem(problem="3+5=?", expected=8), ...]
 
-# Optimize - will optimize system_prompt, instructions, and field descriptions
+# Optimize - will optimize instructions and input field descriptions
 result = optimize_agent_prompts(
     agent=agent,
     trainset=trainset,

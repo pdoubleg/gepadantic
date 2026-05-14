@@ -337,9 +337,11 @@ system_instructions = signature_agent._prepare_system_instructions(ticket)
 # ..."
 ```
 
-### Example 3: Tool Optimization
+### Example 3: Tool and Output Optimization
 
-When using tools, you can also optimize tool descriptions:
+Function tools and structured output models are separate optimization surfaces.
+When using function tools, enable `optimize_tools=True` to optimize tool
+descriptions and parameter descriptions:
 
 ```python
 from pydantic_ai import RunContext
@@ -355,13 +357,39 @@ agent = Agent('openai:gpt-4o', tools=[search_database])
 signature_agent = SignatureAgent(
     agent,
     input_type=QueryInput,
-    optimize_tools=True  # This is the key
+    optimize_tools=True
 )
 
 # Now GEPA can optimize:
 # - "tool:search_database:description" - The tool's docstring
 # - "tool:search_database:param:query" - The parameter description
 ```
+
+When your agent returns a Pydantic output model, enable `optimize_output=True`
+to optimize the output model's description and field descriptions:
+
+```python
+class Answer(BaseModel):
+    """Answer returned to the user."""
+    answer: str = Field(description="The final answer")
+    confidence: str = Field(description="Confidence level")
+
+agent = Agent('openai:gpt-4o', output_type=Answer)
+
+signature_agent = SignatureAgent(
+    agent,
+    input_type=QueryInput,
+    optimize_output=True,
+)
+
+# Now GEPA can optimize:
+# - "output:final_result:description" - The output model description
+# - "output:final_result:param:answer" - The output field description
+# - "output:final_result:param:confidence" - The output field description
+```
+
+Use both flags when you want GEPA to optimize both callable tools and the
+structured response schema.
 
 ## String Inputs
 
@@ -398,7 +426,9 @@ When `input_type=str`:
 2. **Direct Pass-Through**: The string is passed directly as the user prompt
 3. **No Schema Appending**: `append_instructions` is not applicable (raises error if set to `True`)
 
-GEPA will still optimize the agent's base instructions, and optionally output model &/or tool field descriptions.
+GEPA will still optimize the agent's base instructions, plus output model
+components when `optimize_output=True` and function tool components when
+`optimize_tools=True`.
 
 ### Properties with String Input
 
@@ -511,7 +541,9 @@ print(result.data.key_topics)  # ['Q4 planning', 'Mobile app launch', ...]
 
 ### Optimization with String Inputs
 
-When optimizing with `input_type=str`, GEPA focuses on the agent's instructions:
+When optimizing with `input_type=str`, GEPA has no input field descriptions to
+optimize. It can still optimize the agent's instructions, plus any enabled
+output or function tool components:
 
 ```python
 from gepadantic import optimize_agent_prompts
@@ -523,9 +555,13 @@ agent = Agent(
     output_type=DocumentAnalysis
 )
 
-signature_agent = SignatureAgent(agent, input_type=str)
+signature_agent = SignatureAgent(
+    agent,
+    input_type=str,
+    optimize_output=True,
+)
 
-# GEPA will optimize only the instructions component
+# GEPA will optimize instructions and output:* components
 result = optimize_agent_prompts(
     signature_agent=signature_agent,
     trainset=trainset,

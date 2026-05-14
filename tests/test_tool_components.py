@@ -5,16 +5,22 @@ from pydantic_ai.models.test import TestModel
 from pydantic_ai.tools import ToolDefinition
 
 from gepadantic.tool_components import (
+    OutputToolOptimizationManager,
     ToolComponentInfo,
     ToolOptimizationManager,
     _description_key,
     _extract_components,
+    _extract_output_components,
     _format_path,
     _iter_schema_descriptions,
+    _output_description_key,
+    _output_parameter_key,
     _parameter_key,
     _set_schema_description,
     _unwrap_agent,
+    get_or_create_output_tool_optimizer,
     get_or_create_tool_optimizer,
+    get_output_tool_optimizer,
     get_tool_optimizer,
 )
 
@@ -26,11 +32,24 @@ def test_description_key():
     assert _description_key("my_tool") == "tool:my_tool:description"
 
 
+def test_output_description_key():
+    """Test that _output_description_key generates separate output keys."""
+    assert _output_description_key("final_result") == "output:final_result:description"
+
+
 def test_parameter_key_simple():
     """Test _parameter_key with simple paths."""
     assert _parameter_key("calculate", ("x",)) == "tool:calculate:param:x"
     assert _parameter_key("calculate", ("y",)) == "tool:calculate:param:y"
     assert _parameter_key("fetch_data", ("url",)) == "tool:fetch_data:param:url"
+
+
+def test_output_parameter_key_simple():
+    """Test _output_parameter_key with simple paths."""
+    assert (
+        _output_parameter_key("final_result", ("answer",))
+        == "output:final_result:param:answer"
+    )
 
 
 def test_parameter_key_nested():
@@ -286,6 +305,30 @@ def test_extract_components_basic():
     assert len(info.parameter_paths) == 2
 
 
+def test_extract_output_components_basic():
+    """Test extracting separate output components from output tool definitions."""
+    tool_def = ToolDefinition(
+        name="final_result",
+        description="Answer schema",
+        parameters_json_schema={
+            "type": "object",
+            "properties": {
+                "answer": {"type": "string", "description": "Answer text"},
+            },
+        },
+    )
+
+    seed_components, component_info = _extract_output_components([tool_def])
+
+    assert seed_components == {
+        "output:final_result:description": "Answer schema",
+        "output:final_result:param:answer": "Answer text",
+    }
+    assert component_info["final_result"].description_key == (
+        "output:final_result:description"
+    )
+
+
 def test_extract_components_no_description():
     """Test extracting components from tools without descriptions."""
     tool_def = ToolDefinition(
@@ -506,6 +549,36 @@ def test_get_tool_optimizer_after_creation():
     # get_tool_optimizer should now find it
     retrieved = get_tool_optimizer(agent)
     assert retrieved is created
+
+
+def test_get_output_tool_optimizer_after_creation():
+    """Test get_output_tool_optimizer retrieves created optimizer."""
+    agent = Agent(TestModel(), instructions="Test agent")
+
+    created = get_or_create_output_tool_optimizer(agent)
+    retrieved = get_output_tool_optimizer(agent)
+
+    assert retrieved is created
+
+
+def test_output_tool_optimization_manager_filter_candidate():
+    """Test that output manager filters candidates to output-related keys."""
+    agent = Agent(TestModel(), instructions="Test agent")
+    manager = OutputToolOptimizationManager(agent)
+
+    candidate = {
+        "instructions": "Some instructions",
+        "tool:calculate:description": "Tool description",
+        "output:final_result:description": "Output description",
+        "output:final_result:param:answer": "Answer text",
+    }
+
+    filtered = manager._filter_candidate(candidate)
+
+    assert filtered is not None
+    assert "output:final_result:description" in filtered
+    assert "output:final_result:param:answer" in filtered
+    assert "tool:calculate:description" not in filtered
 
 
 def test_tool_optimization_manager_caching():

@@ -36,6 +36,7 @@ from src.gepadantic.loggers import RichConsoleLogger
 
 console = Console()
 
+
 # Step 1: Define input and output models
 class PenguinInput(BaseModel):
     """Input features for Palmer Penguins species classification."""
@@ -49,9 +50,7 @@ class PenguinInput(BaseModel):
     flipper_length_mm: float = Field(
         description="Length of the penguin's flipper in millimeters"
     )
-    body_mass_g: float = Field(
-        description="Body mass of the penguin in grams"
-    )
+    body_mass_g: float = Field(description="Body mass of the penguin in grams")
     sex: Literal["Male", "Female"] = Field(description="Sex of the penguin")
     island: Literal["Torgersen", "Biscoe", "Dream"] = Field(
         description="Island where the penguin was observed"
@@ -185,39 +184,41 @@ def calculate_classification_metrics(
     predictions: list[str], actuals: list[str], label_name: str = "species"
 ) -> dict[str, float]:
     """Calculate precision, recall, F1, and confusion matrix for multi-class classification.
-    
+
     Args:
         predictions: List of predicted labels (species names)
         actuals: List of actual labels (species names)
         label_name: Name of the label being predicted (for display)
-    
+
     Returns:
         Dictionary containing accuracy, precision, recall, F1, and confusion matrix
     """
     # Get unique classes
     classes = sorted(list(set(actuals + predictions)))
     class_to_idx = {cls: idx for idx, cls in enumerate(classes)}
-    
+
     # Convert to numeric labels
     y_pred = [class_to_idx[p] for p in predictions]
     y_true = [class_to_idx[a] for a in actuals]
-    
+
     # Calculate metrics
-    accuracy = sum(p == t for p, t in zip(y_pred, y_true)) / len(y_pred) if y_pred else 0.0
-    
+    accuracy = (
+        sum(p == t for p, t in zip(y_pred, y_true)) / len(y_pred) if y_pred else 0.0
+    )
+
     # Calculate precision, recall, F1 for each class
     precision, recall, f1, support = precision_recall_fscore_support(
         y_true, y_pred, average=None, zero_division=0, labels=list(range(len(classes)))
     )
-    
+
     # Calculate macro averages
     precision_macro, recall_macro, f1_macro, _ = precision_recall_fscore_support(
-        y_true, y_pred, average='macro', zero_division=0
+        y_true, y_pred, average="macro", zero_division=0
     )
-    
+
     # Confusion matrix
     cm = confusion_matrix(y_true, y_pred, labels=list(range(len(classes))))
-    
+
     result = {
         "accuracy": accuracy,
         "precision_macro": precision_macro,
@@ -226,14 +227,14 @@ def calculate_classification_metrics(
         "confusion_matrix": cm,
         "classes": classes,
     }
-    
+
     # Add per-class metrics
     for idx, cls in enumerate(classes):
         result[f"precision_{cls}"] = precision[idx]
         result[f"recall_{cls}"] = recall[idx]
         result[f"f1_{cls}"] = f1[idx]
         result[f"support_{cls}"] = support[idx]
-    
+
     return result
 
 
@@ -241,7 +242,7 @@ def print_classification_report(
     metrics: dict[str, float], title: str = "Classification Metrics"
 ) -> None:
     """Print a detailed classification report.
-    
+
     Args:
         metrics: Dictionary of metrics from calculate_classification_metrics
         title: Title for the report section
@@ -255,22 +256,28 @@ def print_classification_report(
     console.print(f"{'Recall (Macro)':<20} {metrics['recall_macro']:<15.3f}")
     console.print(f"{'F1-Score (Macro)':<20} {metrics['f1_macro']:<15.3f}")
     console.print("-" * 50)
-    
+
     # Print per-class metrics
     classes = metrics.get("classes", [])
     if classes:
         console.print("\nPer-Class Metrics:")
-        console.print(f"{'Class':<15} {'Precision':<12} {'Recall':<12} {'F1-Score':<12} {'Support':<10}")
+        console.print(
+            f"{'Class':<15} {'Precision':<12} {'Recall':<12} {'F1-Score':<12} {'Support':<10}"
+        )
         console.print("-" * 60)
-        console.print(f"{'Class':<15} {'Precision':<12} {'Recall':<12} {'F1-Score':<12} {'Support':<10}")
+        console.print(
+            f"{'Class':<15} {'Precision':<12} {'Recall':<12} {'F1-Score':<12} {'Support':<10}"
+        )
         console.print("-" * 60)
         for cls in classes:
             precision = metrics.get(f"precision_{cls}", 0.0)
             recall = metrics.get(f"recall_{cls}", 0.0)
             f1 = metrics.get(f"f1_{cls}", 0.0)
             support = metrics.get(f"support_{cls}", 0)
-            console.print(f"{cls:<15} {precision:<12.3f} {recall:<12.3f} {f1:<12.3f} {support:<10.0f}")
-    
+            console.print(
+                f"{cls:<15} {precision:<12.3f} {recall:<12.3f} {f1:<12.3f} {support:<10.0f}"
+            )
+
     # Print confusion matrix
     cm = metrics.get("confusion_matrix")
     if cm is not None and classes:
@@ -281,7 +288,9 @@ def print_classification_report(
         console.print(header)
         # Print rows
         for i, cls in enumerate(classes):
-            row = f"{cls[:15]:<15}  " + "  ".join([f"{cm[i][j]:>8}" for j in range(len(classes))])
+            row = f"{cls[:15]:<15}  " + "  ".join(
+                [f"{cm[i][j]:>8}" for j in range(len(classes))]
+            )
             console.print(row)
     console.print("-" * 50)
 
@@ -317,7 +326,7 @@ def species_metric(
 
     if ground_truth is None:
         return 0.0, "No ground truth label found in metadata"
-    
+
     # Check if prediction is correct
     is_correct = predicted_species == ground_truth
 
@@ -343,14 +352,15 @@ def main():
     console.print("\n" + "=" * 70)
     console.print("DATASET PREPARATION")
     console.print("=" * 70)
-    
+
     # First, load the raw dataset to show original distribution before sampling
     # This helps users understand the baseline class distribution and sample size
     console.print("\n📊 Loading Raw Palmer Penguins Dataset...")
     try:
         import seaborn as sns
+
         df_raw = sns.load_dataset("penguins")
-        
+
         # Clean the data the same way as in load_penguins_data
         df_clean = df_raw[
             [
@@ -364,32 +374,38 @@ def main():
             ]
         ].copy()
         df_clean = df_clean.dropna()
-        
+
         # Show raw dataset statistics
         total_raw = len(df_clean)
         raw_species_counts = df_clean["species"].value_counts().sort_index()
-        
+
         console.print("\n📈 Raw Dataset (after removing missing values):")
         console.print(f"   └─ Total Penguins: {total_raw}")
         for species, count in raw_species_counts.items():
-            console.print(f"   └─ {species}: {count} ({count/total_raw:.1%})")
-        
+            console.print(f"   └─ {species}: {count} ({count / total_raw:.1%})")
+
     except Exception as e:
         console.print(f"   ⚠️  Could not load raw dataset: {e}")
-    
+
     console.print("\n" + "-" * 70)
 
     # Load the data with train/holdout split - now returns datasets directly
     n_train = 10
     n_holdout = 10
-    train_dataset, holdout_dataset = load_penguins_data(n_train=n_train, n_holdout=n_holdout)
+    train_dataset, holdout_dataset = load_penguins_data(
+        n_train=n_train, n_holdout=n_holdout
+    )
 
     # Calculate total dataset size
     total_samples = len(train_dataset) + len(holdout_dataset)
-    
+
     console.print(f"\n📊 Sampled Subset for This Run: {total_samples} penguins")
-    console.print(f"   └─ Training Pool: {len(train_dataset)} ({len(train_dataset)/total_samples:.1%})")
-    console.print(f"   └─ Holdout Test: {len(holdout_dataset)} ({len(holdout_dataset)/total_samples:.1%})")
+    console.print(
+        f"   └─ Training Pool: {len(train_dataset)} ({len(train_dataset) / total_samples:.1%})"
+    )
+    console.print(
+        f"   └─ Holdout Test: {len(holdout_dataset)} ({len(holdout_dataset) / total_samples:.1%})"
+    )
     console.print("   └─ Sampling Strategy: Stratified (maintains class balance)")
 
     # Show species statistics for training pool
@@ -407,12 +423,12 @@ def main():
     console.print("\n📈 Training Pool Class Distribution:")
     for label in sorted(train_species_counts.keys()):
         count = train_species_counts[label]
-        console.print(f"   └─ {label}: {count} ({count/len(train_dataset):.1%})")
-    
+        console.print(f"   └─ {label}: {count} ({count / len(train_dataset):.1%})")
+
     console.print("\n📈 Holdout Test Class Distribution:")
     for label in sorted(holdout_species_counts.keys()):
         count = holdout_species_counts[label]
-        console.print(f"   └─ {label}: {count} ({count/len(holdout_dataset):.1%})")
+        console.print(f"   └─ {label}: {count} ({count / len(holdout_dataset):.1%})")
 
     # Split the training dataset into train/val using our helper
     train_ratio = 0.60
@@ -421,37 +437,40 @@ def main():
     )
 
     console.print(f"\n🔀 Training Pool Split (ratio={train_ratio}):")
-    console.print(f"   └─ Training Set: {len(trainset)} ({len(trainset)/len(train_dataset):.1%})")
-    console.print(f"   └─ Validation Set: {len(valset)} ({len(valset)/len(train_dataset):.1%})")
-    
+    console.print(
+        f"   └─ Training Set: {len(trainset)} ({len(trainset) / len(train_dataset):.1%})"
+    )
+    console.print(
+        f"   └─ Validation Set: {len(valset)} ({len(valset) / len(train_dataset):.1%})"
+    )
+
     # Calculate split class distributions
     train_split_counts = {}
     for data_inst in trainset:
         label = data_inst.metadata.get("label")
         train_split_counts[label] = train_split_counts.get(label, 0) + 1
-    
+
     val_split_counts = {}
     for data_inst in valset:
         label = data_inst.metadata.get("label")
         val_split_counts[label] = val_split_counts.get(label, 0) + 1
-    
+
     console.print("\n   Training Set Distribution:")
     for label in sorted(train_split_counts.keys()):
         count = train_split_counts[label]
-        console.print(f"      └─ {label}: {count} ({count/len(trainset):.1%})")
-    
+        console.print(f"      └─ {label}: {count} ({count / len(trainset):.1%})")
+
     console.print("\n   Validation Set Distribution:")
     for label in sorted(val_split_counts.keys()):
         count = val_split_counts[label]
-        console.print(f"      └─ {label}: {count} ({count/len(valset):.1%})")
-    
+        console.print(f"      └─ {label}: {count} ({count / len(valset):.1%})")
+
     console.print("=" * 70)
-    
 
     # Configure the optimization
     reflection_model = "gpt-4.1-mini"
     agent_model = "gpt-4.1-nano"
-    
+
     logger = RichConsoleLogger(console=console)
 
     config = GepaConfig(
@@ -473,7 +492,7 @@ def main():
         # Optimization parameters
         module_selector="all",
         candidate_selection_strategy="pareto",
-        optimize_tools=True,
+        optimize_output=True,
         use_merge=True,
         # LLM for reflection
         reflection_model=reflection_model,
@@ -500,14 +519,19 @@ def main():
     console.print(f"   └─ Reflection Model: {config.reflection_model}")
     console.print("\n📚 Dataset Configuration:")
     console.print(f"   └─ Training Set: {len(config.trainset)} penguins")
-    console.print(f"   └─ Validation Set: {len(config.valset) if config.valset else 0} penguins")
-    console.print(f"   └─ Holdout Test: {len(holdout_dataset)} penguins (for final evaluation)")
+    console.print(
+        f"   └─ Validation Set: {len(config.valset) if config.valset else 0} penguins"
+    )
+    console.print(
+        f"   └─ Holdout Test: {len(holdout_dataset)} penguins (for final evaluation)"
+    )
     console.print("\n⚙️  Optimization Settings:")
     console.print(f"   └─ Max Full Evaluations: {config.max_full_evals}")
     console.print(f"   └─ Max Metric Calls: {config.estimated_metric_calls}")
     console.print(f"   └─ Module Selector: {config.module_selector}")
     console.print(f"   └─ Candidate Selection: {config.candidate_selection_strategy}")
     console.print(f"   └─ Optimize Tools: {config.optimize_tools}")
+    console.print(f"   └─ Optimize Output: {config.optimize_output}")
     console.print(f"   └─ Use Merge: {config.use_merge}")
     console.print(f"   └─ Cache Enabled: {config.enable_cache}")
     console.print("=" * 70 + "\n")
@@ -516,7 +540,9 @@ def main():
     console.print("\n" + "=" * 70)
     console.print("PRE-OPTIMIZATION BASELINE EVALUATION")
     console.print("=" * 70)
-    console.print(f"\nEvaluating baseline agent on holdout set ({len(holdout_dataset)} penguins)...")
+    console.print(
+        f"\nEvaluating baseline agent on holdout set ({len(holdout_dataset)} penguins)..."
+    )
     baseline_correct_predictions = 0
     baseline_total_predictions = 0
     baseline_results_table = []
@@ -571,8 +597,10 @@ def main():
     # Calculate baseline classification metrics
     baseline_predictions = [row["predicted"] for row in baseline_results_table]
     baseline_actuals = [row["actual"] for row in baseline_results_table]
-    baseline_metrics = calculate_classification_metrics(baseline_predictions, baseline_actuals)
-    
+    baseline_metrics = calculate_classification_metrics(
+        baseline_predictions, baseline_actuals
+    )
+
     # Print baseline results
     console.print("\n📋 Baseline Prediction Details:")
     console.print("-" * 110)
@@ -592,7 +620,7 @@ def main():
         f"📊 BASELINE ACCURACY: {baseline_accuracy:.2%} ({baseline_correct_predictions}/{baseline_total_predictions})"
     )
     console.print("-" * 110)
-    
+
     # Print detailed classification metrics
     print_classification_report(baseline_metrics, "📊 Baseline Classification Report")
     console.print("=" * 70 + "\n")
@@ -601,32 +629,36 @@ def main():
     console.print("=" * 70)
     console.print("RUNNING GEPA OPTIMIZATION")
     console.print("=" * 70 + "\n")
-    
+
     result = run_optimization_pipeline(config)
 
     # Display results
     console.print("\n" + "=" * 70)
     console.print("OPTIMIZATION RESULTS")
     console.print("=" * 70)
-    
+
     console.print("\n📈 Performance Metrics:")
     console.print(f"   └─ Best Validation Score: {result.best_score:.4f}")
-    
+
     if result.original_score is not None:
         console.print(f"   └─ Original Validation Score: {result.original_score:.4f}")
         improvement = result.improvement_ratio()
         if improvement is not None:
-            improvement_symbol = "📈" if improvement > 0 else "📉" if improvement < 0 else "➡️"
+            improvement_symbol = (
+                "📈" if improvement > 0 else "📉" if improvement < 0 else "➡️"
+            )
             console.print(f"   └─ {improvement_symbol} Improvement: {improvement:+.2%}")
 
     console.print("\n🔄 Optimization Statistics:")
     console.print(f"   └─ Iterations Completed: {result.num_iterations}")
     console.print(f"   └─ Metric Evaluations: {result.num_metric_calls}")
-    
+
     console.print("\n💰 GEPA Token Usage:")
     console.print(f"   └─ Input Tokens: {result.gepa_usage.input_tokens:,}")
     console.print(f"   └─ Output Tokens: {result.gepa_usage.output_tokens:,}")
-    console.print(f"   └─ Total Tokens: {result.gepa_usage.input_tokens + result.gepa_usage.output_tokens:,}")
+    console.print(
+        f"   └─ Total Tokens: {result.gepa_usage.input_tokens + result.gepa_usage.output_tokens:,}"
+    )
     console.print(f"   └─ API Calls: {result.gepa_usage.requests}")
 
     console.print("\n" + "=" * 70)
@@ -637,7 +669,7 @@ def main():
         # Create title matching RichConsoleLogger style
         title_text = Text()
         title_text.append(component_name, style="bold cyan")
-        
+
         # Create panel with the same styling as proposal messages
         panel = Panel(
             str(component_value),
@@ -645,7 +677,7 @@ def main():
             border_style="bold cyan",
             padding=(1, 2),
         )
-        
+
         console.print(panel)
 
     console.print("\n" + "=" * 70)
@@ -653,28 +685,36 @@ def main():
     # Check if optimization made any improvements
     improvement = result.improvement_ratio()
     has_improvement = improvement is not None and improvement > 0
-    
+
     if not has_improvement:
         console.print("\n" + "=" * 70)
         console.print("⚠️  NO IMPROVEMENT DETECTED")
         console.print("=" * 70)
-        console.print("\nThe optimization did not find a better configuration than the baseline.")
+        console.print(
+            "\nThe optimization did not find a better configuration than the baseline."
+        )
         console.print("Skipping holdout evaluation since the model has not changed.")
-        console.print("\nℹ️  The baseline holdout results above represent the final performance.")
-        
+        console.print(
+            "\nℹ️  The baseline holdout results above represent the final performance."
+        )
+
         # Use baseline metrics as the "optimized" metrics for the summary
         optimized_accuracy = baseline_accuracy
         optimized_metrics = baseline_metrics
         optimized_predictions = baseline_predictions
         accuracy_improvement = 0.0
-        results_table = baseline_results_table  # Use baseline results for the detailed examples
-        
+        results_table = (
+            baseline_results_table  # Use baseline results for the detailed examples
+        )
+
     else:
         # Test the optimized agent on holdout set
         console.print("\n" + "=" * 70)
         console.print("POST-OPTIMIZATION HOLDOUT EVALUATION")
         console.print("=" * 70)
-        console.print(f"\nEvaluating optimized agent on holdout test set ({len(holdout_dataset)} penguins)...")
+        console.print(
+            f"\nEvaluating optimized agent on holdout test set ({len(holdout_dataset)} penguins)..."
+        )
 
         # Create and configure agent
         test_agent = Agent(
@@ -683,7 +723,6 @@ def main():
             output_type=SpeciesPrediction,
         )
 
-
         # Track results
         correct_predictions = 0
         total_predictions = 0
@@ -691,11 +730,10 @@ def main():
 
         # Apply optimized configuration and test on holdout set
         with result.apply_best_to(agent=test_agent, input_type=PenguinInput):
-            
             test_signature_agent = SignatureAgent(
                 test_agent,
                 input_type=PenguinInput,
-                optimize_tools=True,
+                optimize_output=True,
             )
             for i, data_inst in enumerate(holdout_dataset, 1):
                 # Input is already a PenguinInput instance
@@ -755,12 +793,18 @@ def main():
                     )
 
         # Calculate optimized classification metrics
-        optimized_predictions = [row["predicted"] for row in results_table if row["predicted"] != "ERROR"]
-        optimized_actuals = [row["actual"] for row in results_table if row["predicted"] != "ERROR"]
-        
+        optimized_predictions = [
+            row["predicted"] for row in results_table if row["predicted"] != "ERROR"
+        ]
+        optimized_actuals = [
+            row["actual"] for row in results_table if row["predicted"] != "ERROR"
+        ]
+
         if optimized_predictions:  # Only calculate if we have valid predictions
-            optimized_metrics = calculate_classification_metrics(optimized_predictions, optimized_actuals)
-        
+            optimized_metrics = calculate_classification_metrics(
+                optimized_predictions, optimized_actuals
+            )
+
         # Print results table
         console.print("\n📋 Optimized Agent Prediction Details:")
         print("-" * 110)
@@ -784,21 +828,29 @@ def main():
             console.print(
                 f"📊 OPTIMIZED ACCURACY: {optimized_accuracy:.2%} ({correct_predictions}/{total_predictions})"
             )
-            
+
             # Compare with baseline
             if baseline_total_predictions > 0:
                 accuracy_improvement = optimized_accuracy - baseline_accuracy
-                improvement_symbol = "📈" if accuracy_improvement > 0 else "📉" if accuracy_improvement < 0 else "➡️"
+                improvement_symbol = (
+                    "📈"
+                    if accuracy_improvement > 0
+                    else "📉"
+                    if accuracy_improvement < 0
+                    else "➡️"
+                )
                 console.print(
                     f"{improvement_symbol} IMPROVEMENT vs BASELINE: {accuracy_improvement:+.2%} "
                     f"({baseline_accuracy:.2%} → {optimized_accuracy:.2%})"
                 )
-        
+
         print("-" * 110)
-        
+
         # Print detailed classification metrics
         if optimized_predictions:
-            print_classification_report(optimized_metrics, "📊 Optimized Classification Report")
+            print_classification_report(
+                optimized_metrics, "📊 Optimized Classification Report"
+            )
 
     # Show a few detailed examples
     console.print("\n" + "=" * 70)
@@ -832,45 +884,72 @@ def main():
     console.print("=" * 70)
     console.print("\n📊 Dataset Configuration:")
     console.print(f"   └─ Total Samples: {total_samples}")
-    console.print(f"   └─ Training: {len(trainset)} | Validation: {len(valset)} | Holdout: {len(holdout_dataset)}")
-    
+    console.print(
+        f"   └─ Training: {len(trainset)} | Validation: {len(valset)} | Holdout: {len(holdout_dataset)}"
+    )
+
     if has_improvement:
         console.print("\n📈 Performance Comparison (Holdout Test Set):")
-        console.print(f"   {'Metric':<25} {'Baseline':<15} {'Optimized':<15} {'Improvement':<15}")
-        console.print(f"   {'-'*70}")
-        console.print(f"   {'Accuracy':<25} {baseline_accuracy:<15.3f} {optimized_accuracy:<15.3f} {accuracy_improvement:+.3f}")
-        
+        console.print(
+            f"   {'Metric':<25} {'Baseline':<15} {'Optimized':<15} {'Improvement':<15}"
+        )
+        console.print(f"   {'-' * 70}")
+        console.print(
+            f"   {'Accuracy':<25} {baseline_accuracy:<15.3f} {optimized_accuracy:<15.3f} {accuracy_improvement:+.3f}"
+        )
+
         if optimized_predictions:
             # Show comparison between baseline and optimized
-            f1_improvement = optimized_metrics['f1_macro'] - baseline_metrics['f1_macro']
-            precision_improvement = optimized_metrics['precision_macro'] - baseline_metrics['precision_macro']
-            recall_improvement = optimized_metrics['recall_macro'] - baseline_metrics['recall_macro']
-            
-            console.print(f"   {'Precision (Macro)':<25} {baseline_metrics['precision_macro']:<15.3f} {optimized_metrics['precision_macro']:<15.3f} {precision_improvement:+.3f}")
-            console.print(f"   {'Recall (Macro)':<25} {baseline_metrics['recall_macro']:<15.3f} {optimized_metrics['recall_macro']:<15.3f} {recall_improvement:+.3f}")
-            console.print(f"   {'F1-Score (Macro)':<25} {baseline_metrics['f1_macro']:<15.3f} {optimized_metrics['f1_macro']:<15.3f} {f1_improvement:+.3f}")
+            f1_improvement = (
+                optimized_metrics["f1_macro"] - baseline_metrics["f1_macro"]
+            )
+            precision_improvement = (
+                optimized_metrics["precision_macro"]
+                - baseline_metrics["precision_macro"]
+            )
+            recall_improvement = (
+                optimized_metrics["recall_macro"] - baseline_metrics["recall_macro"]
+            )
+
+            console.print(
+                f"   {'Precision (Macro)':<25} {baseline_metrics['precision_macro']:<15.3f} {optimized_metrics['precision_macro']:<15.3f} {precision_improvement:+.3f}"
+            )
+            console.print(
+                f"   {'Recall (Macro)':<25} {baseline_metrics['recall_macro']:<15.3f} {optimized_metrics['recall_macro']:<15.3f} {recall_improvement:+.3f}"
+            )
+            console.print(
+                f"   {'F1-Score (Macro)':<25} {baseline_metrics['f1_macro']:<15.3f} {optimized_metrics['f1_macro']:<15.3f} {f1_improvement:+.3f}"
+            )
     else:
         console.print("\n📈 Performance (Holdout Test Set - No Improvement):")
         console.print(f"   {'Metric':<25} {'Value':<15}")
-        console.print(f"   {'-'*40}")
+        console.print(f"   {'-' * 40}")
         console.print(f"   {'Accuracy':<25} {baseline_accuracy:<15.3f}")
-        
+
         if optimized_predictions:
             # Show only baseline metrics (no comparison)
-            console.print(f"   {'Precision (Macro)':<25} {baseline_metrics['precision_macro']:<15.3f}")
-            console.print(f"   {'Recall (Macro)':<25} {baseline_metrics['recall_macro']:<15.3f}")
-            console.print(f"   {'F1-Score (Macro)':<25} {baseline_metrics['f1_macro']:<15.3f}")
-    
+            console.print(
+                f"   {'Precision (Macro)':<25} {baseline_metrics['precision_macro']:<15.3f}"
+            )
+            console.print(
+                f"   {'Recall (Macro)':<25} {baseline_metrics['recall_macro']:<15.3f}"
+            )
+            console.print(
+                f"   {'F1-Score (Macro)':<25} {baseline_metrics['f1_macro']:<15.3f}"
+            )
+
     console.print("\n💰 Optimization Cost:")
-    console.print(f"   └─ Total Tokens: {result.gepa_usage.input_tokens + result.gepa_usage.output_tokens:,}")
+    console.print(
+        f"   └─ Total Tokens: {result.gepa_usage.input_tokens + result.gepa_usage.output_tokens:,}"
+    )
     console.print(f"   └─ API Calls: {result.gepa_usage.requests}")
     console.print(f"   └─ Iterations: {result.num_iterations}")
-    
+
     console.print("\n🔍 Optimization DAG:")
     dag_string = result.graphviz_dag
-    
+
     logger.render_optimization_dag(dag_string, copy_to_clipboard=True)
-    
+
     console.print("\n" + "=" * 70)
     console.print("✅ EXAMPLE COMPLETE!")
     console.print("=" * 70 + "\n")

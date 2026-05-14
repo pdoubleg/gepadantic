@@ -7,6 +7,7 @@ from contextlib import (
     AbstractAsyncContextManager,
     ExitStack,
     asynccontextmanager,
+    contextmanager,
     nullcontext,
 )
 from typing import TYPE_CHECKING, Any, overload
@@ -25,8 +26,11 @@ from pydantic_ai.toolsets import AbstractToolset
 
 from .signature import BoundInputSpec, InputSpec, build_input_spec
 from .tool_components import (
+    OutputToolOptimizationManager,
     ToolOptimizationManager,
+    get_or_create_output_tool_optimizer,
     get_or_create_tool_optimizer,
+    get_output_tool_optimizer,
     get_tool_optimizer,
 )
 
@@ -95,6 +99,7 @@ class SignatureAgent(WrapperAgent[AgentDepsT, OutputDataT]):
         *,
         append_instructions: bool = False,
         optimize_tools: bool = False,
+        optimize_output: bool = False,
     ):
         """Initialize the SignatureAgent wrapper.
 
@@ -103,15 +108,16 @@ class SignatureAgent(WrapperAgent[AgentDepsT, OutputDataT]):
             input_type: The structured input specification (BaseModel subclass, BoundInputSpec, or str).
             output_type: Optional output type or spec expected from the wrapped agent.
             append_instructions: If True, append signature instructions to the agent's instructions.
-            optimize_tools: If True, expose and optimize tool descriptions and parameter schemas via GEPA.
+            optimize_tools: If True, expose and optimize function tool descriptions and parameter schemas via GEPA.
+            optimize_output: If True, expose and optimize output model descriptions and field schemas via GEPA.
         """
         # Determine if input_type is str
         self._is_string_input = input_type is str
-        
+
         # Build bound spec only for BaseModel types (not str or None)
         bound_spec = (
-            build_input_spec(input_type) 
-            if input_type is not None and input_type is not str 
+            build_input_spec(input_type)
+            if input_type is not None and input_type is not str
             else None
         )
 
@@ -127,13 +133,16 @@ class SignatureAgent(WrapperAgent[AgentDepsT, OutputDataT]):
                 "per-call when invoking signature runs."
             )
         if self._is_string_input and append_instructions:
-            raise ValueError("append_instructions cannot be True when input_type is str (since there is schema information to append!)")
+            raise ValueError(
+                "append_instructions cannot be True when input_type is str (since there is schema information to append!)"
+            )
 
         super().__init__(wrapped)
         self.append_instructions = append_instructions
         self._input_spec: BoundInputSpec[BaseModel] | None = bound_spec
         self._default_output_type = inferred_output_type
         self._optimize_tools = optimize_tools
+        self._optimize_output = optimize_output
 
         self._tool_optimizer: ToolOptimizationManager | None = None
         if optimize_tools:
@@ -142,6 +151,16 @@ class SignatureAgent(WrapperAgent[AgentDepsT, OutputDataT]):
             existing_optimizer = get_tool_optimizer(wrapped)
             if existing_optimizer is not None:
                 self._tool_optimizer = existing_optimizer
+
+        self._output_tool_optimizer: OutputToolOptimizationManager | None = None
+        if optimize_output:
+            self._output_tool_optimizer = get_or_create_output_tool_optimizer(
+                wrapped, output_type=inferred_output_type
+            )
+        else:
+            existing_output_optimizer = get_output_tool_optimizer(wrapped)
+            if existing_output_optimizer is not None:
+                self._output_tool_optimizer = existing_output_optimizer
 
     @property
     def input_spec(self) -> BoundInputSpec[BaseModel] | None:
@@ -172,6 +191,11 @@ class SignatureAgent(WrapperAgent[AgentDepsT, OutputDataT]):
         """Return whether tool optimization is enabled."""
         return self._optimize_tools
 
+    @property
+    def optimize_output(self) -> bool:
+        """Return whether output model optimization is enabled."""
+        return self._optimize_output
+
     def get_tool_components(self) -> dict[str, str]:
         """Return the seed tool component texts when tool optimization is enabled."""
         if not self._optimize_tools or not self._tool_optimizer:
@@ -183,6 +207,18 @@ class SignatureAgent(WrapperAgent[AgentDepsT, OutputDataT]):
         if not self._optimize_tools or not self._tool_optimizer:
             return []
         return self._tool_optimizer.get_component_keys()
+
+    def get_output_components(self) -> dict[str, str]:
+        """Return the seed output model component texts when output optimization is enabled."""
+        if not self._optimize_output or not self._output_tool_optimizer:
+            return {}
+        return self._output_tool_optimizer.get_seed_components()
+
+    def get_output_component_keys(self) -> list[str]:
+        """Return the list of output model component keys."""
+        if not self._optimize_output or not self._output_tool_optimizer:
+            return []
+        return self._output_tool_optimizer.get_component_keys()
 
     def _require_input_instance(self, signature: BaseModel | str) -> None:
         """Ensure the provided signature instance matches the configured input type."""
@@ -235,9 +271,10 @@ class SignatureAgent(WrapperAgent[AgentDepsT, OutputDataT]):
 
         if self._input_spec is None:
             raise ValueError("No input spec configured")
-        
+
         return self._input_spec.generate_system_instructions(
-            signature, candidate=candidate  # type: ignore[arg-type]
+            signature,
+            candidate=candidate,  # type: ignore[arg-type]
         )
 
     def _compose_instructions_override(
@@ -266,13 +303,13 @@ class SignatureAgent(WrapperAgent[AgentDepsT, OutputDataT]):
         user_prompt: UserPromptInput | None,
     ) -> tuple[UserPromptInput | None, Instructions[AgentDepsT] | None]:
         """Prepare the user prompt and instructions override for a run.
-        
+
         Args:
             signature: The structured input instance or string to process.
             candidate: Optional GEPA candidate with optimized text for components.
             message_history: History of the conversation so far.
             user_prompt: Explicit user prompt to send for follow-ups.
-            
+
         Returns:
             Tuple of (user_prompt, instructions_override).
         """
@@ -311,11 +348,22 @@ class SignatureAgent(WrapperAgent[AgentDepsT, OutputDataT]):
             return user_prompt
         return (user_prompt,)
 
-    def _tool_candidate_context(self, candidate: dict[str, str] | None):
-        """Context manager that applies tool candidate overrides if enabled."""
-        if not self._tool_optimizer or candidate is None:
-            return nullcontext()
-        return self._tool_optimizer.candidate_context(candidate)
+    @contextmanager
+    def _optimization_candidate_context(self, candidate: dict[str, str] | None):
+        """Context manager that applies tool and output candidate overrides."""
+        if candidate is None:
+            with nullcontext():
+                yield
+            return
+
+        with ExitStack() as stack:
+            if self._tool_optimizer:
+                stack.enter_context(self._tool_optimizer.candidate_context(candidate))
+            if self._output_tool_optimizer:
+                stack.enter_context(
+                    self._output_tool_optimizer.candidate_context(candidate)
+                )
+            yield
 
     @overload
     async def run_signature(
@@ -420,7 +468,7 @@ class SignatureAgent(WrapperAgent[AgentDepsT, OutputDataT]):
             )
 
         with ExitStack() as stack:
-            stack.enter_context(self._tool_candidate_context(candidate))
+            stack.enter_context(self._optimization_candidate_context(candidate))
 
             if instructions_override is not None:
                 stack.enter_context(
@@ -546,7 +594,7 @@ class SignatureAgent(WrapperAgent[AgentDepsT, OutputDataT]):
             )
 
         with ExitStack() as stack:
-            stack.enter_context(self._tool_candidate_context(candidate))
+            stack.enter_context(self._optimization_candidate_context(candidate))
 
             if instructions_override is not None:
                 stack.enter_context(
@@ -672,7 +720,7 @@ class SignatureAgent(WrapperAgent[AgentDepsT, OutputDataT]):
                 "run_signature_stream(..., output_type=...)."
             )
 
-        with self._tool_candidate_context(candidate):
+        with self._optimization_candidate_context(candidate):
             if instructions_override is None:
                 async with self.wrapped.run_stream(
                     user_prompt=normalized_user_prompt,

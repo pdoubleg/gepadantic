@@ -226,7 +226,12 @@ def get_species_info(species: str) -> str:
     return info.get(species, "Unknown species")
 
 # Wrap in SignatureAgent
-signature_agent = SignatureAgent(base_agent, input_type=PenguinInput)
+signature_agent = SignatureAgent(
+    base_agent,
+    input_type=PenguinInput,
+    optimize_tools=True,
+    optimize_output=True,
+)
 
 # Load and split data
 dataset = load_penguins_data(n_train=30)
@@ -234,12 +239,11 @@ trainset, valset = split_dataset(dataset, train_ratio=0.6)
 
 # Configure with pre-built agent
 config = GepaConfig(
-    agent=signature_agent,  # Pass the agent directly
+    signature_agent=signature_agent,  # Pass the agent directly
     trainset=trainset,
     valset=valset,
     metric=species_metric,
     auto="light",
-    optimize_tools=True,
 )
 
 result = run_optimization_pipeline(config)
@@ -273,7 +277,11 @@ base_agent = Agent(
     output_type=SpeciesPrediction,
 )
 
-signature_agent = SignatureAgent(base_agent, input_type=PenguinInput)
+signature_agent = SignatureAgent(
+    base_agent,
+    input_type=PenguinInput,
+    optimize_output=True,
+)
 
 # Run optimization with explicit parameters
 result = optimize_agent_prompts(
@@ -329,7 +337,11 @@ base_agent = Agent(
     output_type=SpeciesPrediction,
 )
 
-signature_agent = SignatureAgent(base_agent, input_type=PenguinInput)
+signature_agent = SignatureAgent(
+    base_agent,
+    input_type=PenguinInput,
+    optimize_output=True,
+)
 
 # 2. Load and prepare data
 dataset = load_penguins_data(n_train=30)
@@ -456,7 +468,8 @@ You must provide **exactly one** of the following:
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `optimize_tools` | `bool` | `True` | Whether to optimize tool descriptions (e.g., output model schema text components) |
+| `optimize_tools` | `bool` | `False` | Whether to optimize function tool descriptions and parameter descriptions as `tool:*` components |
+| `optimize_output` | `bool` | `True` | Whether to optimize structured output model descriptions and field descriptions as `output:*` components |
 | `seed_candidate` | `dict[str, str]` | `None` | Optional initial candidate prompts to start optimization from |
 | `reflection_model` | `str` | `None` | Model to use for reflection/mutation. If `None`, uses `agent_model` |
 | `reflection_minibatch_size` | `int` | `3` | Number of examples to use for reflection in each proposal |
