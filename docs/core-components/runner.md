@@ -100,7 +100,7 @@ Choose one approach:
 ### Optimization Strategy
 
 - **`reflection_model`**: Model to use for proposing new prompts (defaults to agent's model)
-- **`candidate_selection_strategy`**: `"pareto"` (default), `"current_best"`, or `"epsilon_greedy"`
+- **`candidate_selection_strategy`**: `"pareto"` (default), `"current_best"`, `"epsilon_greedy"`, or `"top_k_pareto"`
 - **`module_selector`**: `"all"` (default) or `"round_robin"` for component selection
 - **`use_merge`**: Enable merge strategy for combining candidates
 
@@ -113,8 +113,34 @@ Choose one approach:
 ### Logging
 
 - **`logger`**: Custom logger (defaults to `StdOutLogger`)
+- **`callbacks`**: Structured GEPA lifecycle callbacks for UI streams, queues, or custom telemetry
 - **`display_progress_bar`**: Show progress during optimization
 - **`run_dir`**: Directory to save results
+
+Use `logger` for human-readable console text. Use `callbacks` when another
+system needs structured run updates, such as a FastAPI SSE/WebSocket endpoint.
+
+```python
+from gepadantic import EventBufferCallback, JSONLRunLogger, optimize_agent_prompts
+
+events = EventBufferCallback()
+jsonl = JSONLRunLogger("optimization-events.jsonl", run_id="audit-form-v1")
+
+result = optimize_agent_prompts(
+    signature_agent=agent,
+    trainset=trainset,
+    metric=metric,
+    callbacks=[events, jsonl],
+    max_metric_calls=100,
+)
+
+for event in events.events:
+    print(event.type, event.message)
+```
+
+`JSONLRunLogger` writes one normalized event per line. It uses the standard
+library by default and can render through `structlog` when `use_structlog=True`
+and structlog is installed by the host application.
 
 ## GepaOptimizationResult
 
@@ -166,6 +192,9 @@ if improvement:
 ```python
 # Get Graphviz DOT format for the optimization evolution graph
 dot_graph = result.graphviz_dag
+
+# Get GEPA's interactive HTML candidate tree
+html_tree = result.candidate_tree_html
 ```
 
 The DAG visualization shows:

@@ -596,11 +596,11 @@ wheels = [
 
 [[package]]
 name = "gepa"
-version = "0.0.26"
+version = "0.1.1"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/ef/98/b8f1ccc8cc2a319f21433df45bcec8a8f7903ee08aacd0acfdc475f47c05/gepa-0.0.26.tar.gz", hash = "sha256:0119ca8022e93b6236bc154a57bb910bdb117485dc067d77777933dd3e9e9ad8", size = 141776 }
+sdist = { url = "https://files.pythonhosted.org/packages/e4/62/10f5a8f24c075e3b64f952be73ba8e15f0055584bbcdf9ce48d754a36679/gepa-0.1.1.tar.gz", hash = "sha256:643fda01c23de4c9f01306e01305dd69facc29bcb34ad59e4cd07e6621d34aa1", size = 272251 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/05/6e/f1141b76398026ef77f0d52a17b37d26ceb7cd320e0ad3a72c59fe00b983/gepa-0.0.26-py3-none-any.whl", hash = "sha256:331e40d8693a4192de2eb3b2b4df10d410ead49173f748d50c32a035cf746e63", size = 139666 },
+    { url = "https://files.pythonhosted.org/packages/dc/b7/8c72dedbb950d88a6f64588fcbc590d2a21e2b9f19b36aa6c5016c54ec75/gepa-0.1.1-py3-none-any.whl", hash = "sha256:71ead7c591eafcc727b83509cdc4182f20264800a6ddf8520d61419daeb47466", size = 244246 },
 ]
 
 [[package]]
@@ -644,7 +644,7 @@ lint = [
 [package.metadata]
 requires-dist = [
     { name = "cloudpickle", specifier = ">=3.0.0" },
-    { name = "gepa", specifier = ">=0.0.12" },
+    { name = "gepa", specifier = ">=0.1.1,<0.2" },
     { name = "mcp-run-python", specifier = ">=0.0.21" },
     { name = "pandas", specifier = ">=2.3.3" },
     { name = "pydantic", specifier = ">=2.12.4" },

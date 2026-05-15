@@ -15,6 +15,7 @@ from pydantic_ai import Agent
 from pydantic_ai.messages import UserPromptPart
 from pydantic_ai.models.test import TestModel
 
+from gepadantic.callbacks import EventBufferCallback
 from gepadantic.components import (
     extract_seed_candidate,
     extract_seed_candidate_with_signature,
@@ -100,6 +101,7 @@ def test_optimize_agent_prompts_minimal_flow():
     reflection_model = TestModel(
         custom_output_args=reflection_output.model_dump(mode="python")
     )
+    event_buffer = EventBufferCallback()
 
     # Keep the budget low; use TestModel() for the reflection model to exercise the full path
     result = optimize_agent_prompts(
@@ -110,6 +112,7 @@ def test_optimize_agent_prompts_minimal_flow():
         max_metric_calls=20,
         display_progress_bar=False,
         track_best_outputs=False,
+        callbacks=[event_buffer],
         seed=0,
     )
 
@@ -120,6 +123,10 @@ def test_optimize_agent_prompts_minimal_flow():
     assert result.original_candidate == seed
     assert result.num_metric_calls > 0
     assert result.num_metric_calls <= 30
+    assert "<html" in result.candidate_tree_html.lower()
+    event_types = {event.type for event in event_buffer.events}
+    assert "run_started" in event_types
+    assert "run_completed" in event_types
 
 
 def test_optimize_agent_prompts_minimal_flow_with_signature():

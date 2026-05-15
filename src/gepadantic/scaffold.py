@@ -12,6 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal, TypeVar
 
+from gepa.core.callbacks import GEPACallback
 from gepa.logging.logger import LoggerProtocol, StdOutLogger
 from gepa.proposer.reflective_mutation.base import (
     CandidateSelector,
@@ -152,9 +153,12 @@ class GepaConfig:
     The 'round_robin' strategy cycles through components in order. The 'all' strategy selects all components for modification in every GEPA iteration."""
 
     candidate_selection_strategy: (
-        CandidateSelector | Literal["pareto", "current_best", "epsilon_greedy"]
+        CandidateSelector
+        | Literal["pareto", "current_best", "epsilon_greedy", "top_k_pareto"]
     ) = "pareto"
-    """Strategy for selecting candidates - "pareto", "current_best", "epsilon_greedy". (default: "pareto")."""
+    """Strategy for selecting candidates - "pareto", "current_best", "epsilon_greedy", or "top_k_pareto". \
+    The "top_k_pareto" strategy samples from the strongest Pareto-front candidates instead of considering the whole frontier. \
+    Defaults to "pareto"."""
 
     # Merge options
     use_merge: bool = True
@@ -170,6 +174,9 @@ class GepaConfig:
     # Stopping options
     stop_callbacks: StopperProtocol | Sequence[StopperProtocol] | None = None
     """Stopper conditions for stopping optimization (default: None). If None, optimization will run until the budget, e.g. max_metric_calls, is exhausted."""
+
+    callbacks: Sequence[GEPACallback] | None = None
+    """GEPA lifecycle callbacks for structured run events (default: None)."""
 
     # Runtime options
     display_progress_bar: bool = True
@@ -367,6 +374,7 @@ def run_optimization_pipeline(config: GepaConfig) -> GepaOptimizationResult:
         max_merge_invocations=config.max_merge_invocations,
         merge_val_overlap_floor=config.merge_val_overlap_floor,
         stop_callbacks=config.stop_callbacks,
+        callbacks=config.callbacks,
         display_progress_bar=config.display_progress_bar,
         track_best_outputs=config.track_best_outputs,
         enable_cache=config.enable_cache,

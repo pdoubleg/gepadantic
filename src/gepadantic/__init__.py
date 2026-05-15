@@ -29,6 +29,17 @@ from .components import (
     apply_candidate_to_signature_model,
     apply_candidate_to_tool_model,
 )
+from .callbacks import (
+    EventBufferCallback,
+    EventEmitter,
+    JSONLRunLogger,
+    OptimizationEventCallback,
+    OptimizationRunEvent,
+    QueueOptimizationCallback,
+    RichConsoleCallback,
+    event_stream_callback,
+)
+from .lm import get_openai_model
 from .loggers import RichConsoleLogger
 
 __all__ = [
@@ -68,6 +79,15 @@ __all__ = [
     "apply_candidate_to_signature_model",
     "apply_candidate_to_tool_model",
     "get_openai_model",
+    # Callbacks
+    "OptimizationRunEvent",
+    "EventEmitter",
+    "OptimizationEventCallback",
+    "EventBufferCallback",
+    "JSONLRunLogger",
+    "QueueOptimizationCallback",
+    "RichConsoleCallback",
+    "event_stream_callback",
     # Logging
     "RichConsoleLogger",
 ]

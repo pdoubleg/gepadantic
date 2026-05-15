@@ -7,6 +7,7 @@ from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
 import gepa.api
+from gepa.core.callbacks import GEPACallback
 from gepa.core.result import GEPAResult
 from gepa.gepa_utils import find_dominator_programs
 from gepa.logging.logger import LoggerProtocol, StdOutLogger
@@ -183,7 +184,7 @@ class GepaOptimizationResult(BaseModel):
     num_metric_calls: int
     """Total number of metric evaluations performed."""
 
-    raw_result: GEPAResult[dict[str, str], RolloutOutput[Any]] | None = Field(
+    raw_result: GEPAResult[RolloutOutput[Any], Any] | None = Field(
         default=None, exclude=True, repr=False
     )
     """The raw GEPA optimization result."""
@@ -254,6 +255,13 @@ class GepaOptimizationResult(BaseModel):
             self.raw_result.val_aggregate_scores,
         )
 
+    @property
+    def candidate_tree_html(self) -> str:
+        """Return GEPA's interactive HTML rendering of the candidate tree."""
+        if self.raw_result is None:
+            raise ValueError("Raw result is not available")
+        return self.raw_result.candidate_tree_html()
+
 
 def optimize_agent_prompts(
     signature_agent: AbstractAgent[Any, Any],
@@ -270,7 +278,7 @@ def optimize_agent_prompts(
     # Reflection-based configuration
     reflection_model: str | None = None,
     candidate_selection_strategy: CandidateSelector
-    | Literal["pareto", "current_best", "epsilon_greedy"] = "pareto",
+    | Literal["pareto", "current_best", "epsilon_greedy", "top_k_pareto"] = "pareto",
     skip_perfect_score: bool = True,
     reflection_minibatch_size: int = 3,
     max_tool_return_chars: int = DEFAULT_MAX_TOOL_RETURN_CHARS,
@@ -284,6 +292,7 @@ def optimize_agent_prompts(
     merge_val_overlap_floor: int = 5,
     # Stopping
     stop_callbacks: StopperProtocol | Sequence[StopperProtocol] | None = None,
+    callbacks: Sequence[GEPACallback] | None = None,
     # Caching configuration
     enable_cache: bool = False,
     cache_dir: str | None = None,
@@ -322,7 +331,10 @@ def optimize_agent_prompts(
         max_full_evals: Maximum number of full evaluations (budget).
         auto: Automatically set the budget based on the dataset size. Can be 'light', 'medium', or 'heavy'.
         reflection_model: Model name to use for reflection (proposing new prompts).
-        candidate_selection_strategy: Strategy for selecting candidates ('pareto', 'current_best', or 'epsilon_greedy').
+        candidate_selection_strategy: Strategy for selecting candidates ('pareto',
+            'current_best', 'epsilon_greedy', or 'top_k_pareto'). The 'top_k_pareto'
+            strategy samples from the strongest Pareto-front candidates instead of
+            considering the whole frontier.
         skip_perfect_score: Whether to skip updating if perfect score achieved on minibatch.
         reflection_minibatch_size: Number of examples to use for reflection in each proposal.
         max_tool_return_chars: Maximum characters to include from each tool return in reflection traces.
@@ -333,6 +345,7 @@ def optimize_agent_prompts(
         max_merge_invocations: Maximum number of merge invocations to perform.
         merge_val_overlap_floor: Minimum number of validation examples to overlap between merge candidates.
         stop_callbacks: Optional stopper protocol or sequence of stoppers to control when optimization should halt.
+        callbacks: Optional GEPA lifecycle callbacks for structured run events.
         enable_cache: Whether to enable caching of metric results for resumable runs.
         cache_dir: Directory to store cache files. If None, uses '.gepa_cache' in current directory.
         cache_verbose: Whether to log cache hits and misses.
@@ -438,7 +451,7 @@ def optimize_agent_prompts(
         module_selector = "all"
 
     # Run optimization
-    raw_result: GEPAResult[RolloutOutput[Any]] = gepa.api.optimize(
+    raw_result: GEPAResult[RolloutOutput[Any], Any] = gepa.api.optimize(
         adapter=adapter,
         seed_candidate=seed_candidate,
         trainset=train_instances,
@@ -458,6 +471,7 @@ def optimize_agent_prompts(
         merge_val_overlap_floor=merge_val_overlap_floor,
         # Stopping
         stop_callbacks=stop_callbacks,
+        callbacks=list(callbacks) if callbacks is not None else None,
         # Logging
         logger=logger,
         run_dir=run_dir,

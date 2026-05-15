@@ -485,7 +485,7 @@ You must provide **exactly one** of the following:
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `module_selector` | `ReflectionComponentSelector` \| `"round_robin"` \| `"all"` | `"all"` | Component selection strategy. `"round_robin"` cycles through components; `"all"` selects all components every iteration |
-| `candidate_selection_strategy` | `CandidateSelector` \| `"pareto"` \| `"current_best"` \| `"epsilon_greedy"` | `"pareto"` | Strategy for selecting candidates from the population |
+| `candidate_selection_strategy` | `CandidateSelector` \| `"pareto"` \| `"current_best"` \| `"epsilon_greedy"` \| `"top_k_pareto"` | `"pareto"` | Strategy for selecting candidates from the population. `"top_k_pareto"` samples from the strongest Pareto-front candidates |
 
 #### Merge Strategy
 
@@ -500,6 +500,7 @@ You must provide **exactly one** of the following:
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `stop_callbacks` | `StopperProtocol` \| `Sequence[StopperProtocol]` | `None` | Custom stopper conditions for early termination |
+| `callbacks` | `Sequence[GEPACallback]` | `None` | Structured lifecycle callbacks for UI streams, queues, telemetry, or custom rich rendering |
 
 #### Runtime Display
 
@@ -523,6 +524,9 @@ You must provide **exactly one** of the following:
 | `output_dir` | `str` \| `Path` | `"optimization_results"` | Directory to save optimization results |
 | `save_result` | `bool` | `True` | Whether to automatically save results to JSON |
 | `logger` | `LoggerProtocol` | `None` | Custom logger instance. If `None`, uses `StdOutLogger` |
+
+Use `logger` for human-readable console text. Use `callbacks` when another
+system needs structured updates during a run.
 
 #### MLflow Integration
 
