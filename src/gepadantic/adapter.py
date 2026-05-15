@@ -97,7 +97,9 @@ class PydanticAIGEPAAdapter(
         self.metric = metric
         # Only build input_spec for BaseModel types, not str
         self.input_spec: BoundInputSpec[BaseModel] | None = (
-            build_input_spec(input_type) if input_type is not None and input_type is not str else None
+            build_input_spec(input_type)
+            if input_type is not None and input_type is not str
+            else None
         )
         self.reflection_sampler = reflection_sampler
         self.cache_manager = cache_manager

@@ -73,7 +73,9 @@ def auto_budget(
     """
     import numpy as np
 
-    num_trials = int(max(2 * (num_preds * 2) * np.log2(num_candidates), 1.5 * num_candidates))
+    num_trials = int(
+        max(2 * (num_preds * 2) * np.log2(num_candidates), 1.5 * num_candidates)
+    )
     if num_trials < 0 or valset_size < 0 or minibatch_size < 0:
         raise ValueError("num_trials, valset_size, and minibatch_size must be >= 0.")
     if full_eval_steps < 1:
@@ -369,7 +371,7 @@ def optimize_agent_prompts(
     # Extract seed candidate from agent and optional signature
     # Only extract from input_type if it's a BaseModel (not str or None)
     should_extract_input = (
-        input_type is not None 
+        input_type is not None
         and input_type is not str
         and (not isinstance(input_type, type) or issubclass(input_type, BaseModel))
     )
@@ -412,18 +414,14 @@ def optimize_agent_prompts(
             enabled=True,
             verbose=cache_verbose,
         )
-        
+
     # If no reflection model is provided, use the agent's model
     if not reflection_model:
         reflection_model = signature_agent.wrapped.model.model_name
 
     # Create adapter
     # Only pass input_type to adapter if it's a BaseModel (not str or None)
-    adapter_input_type = (
-        input_type 
-        if should_extract_input
-        else None
-    )
+    adapter_input_type = input_type if should_extract_input else None
     adapter = PydanticAIGEPAAdapter(
         agent=signature_agent,
         metric=metric,

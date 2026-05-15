@@ -5,8 +5,8 @@ from typing import Any
 import pytest
 from inline_snapshot import snapshot
 from pydantic import BaseModel, Field
-from pydantic_ai import Agent, ToolDefinition
-from pydantic_ai.messages import ModelRequest, UserPromptPart
+from pydantic_ai import Agent, RunContext, ToolDefinition
+from pydantic_ai.messages import ModelRequest, SystemPromptPart, UserPromptPart
 from pydantic_ai.models.test import TestModel
 
 from gepadantic.components import (
@@ -143,6 +143,157 @@ Inputs
     )
     assert request.instructions is not None
     assert request.instructions == snapshot("Be concise and accurate.")
+
+
+def test_extract_seed_candidate_excludes_instruction_callables():
+    """Only static instruction text should be optimized by GEPA."""
+    agent = Agent(
+        TestModel(custom_output_text="Response"),
+        instructions="Static instructions.",
+        output_type=str,
+        name="callable_seed_agent",
+    )
+
+    @agent.instructions
+    def dynamic_instructions() -> str:
+        return "Dynamic runtime instructions."
+
+    seed = extract_seed_candidate(agent)
+
+    assert seed["instructions"] == "Static instructions."
+
+
+def test_apply_candidate_preserves_instruction_callables():
+    """Candidate overrides should keep pydantic-ai instruction decorators active."""
+    agent = Agent(
+        TestModel(custom_output_text="Response"),
+        instructions="Original instructions.",
+        deps_type=str,
+        output_type=str,
+        name="callable_agent",
+    )
+
+    @agent.instructions
+    def dynamic_instructions(ctx: RunContext[str]) -> str:
+        return f"Use tenant policy: {ctx.deps}."
+
+    with apply_candidate_to_agent(agent, {"instructions": "Optimized instructions."}):
+        result = agent.run_sync("Test prompt", deps="enterprise")
+
+    request = result.all_messages()[0]
+    assert isinstance(request, ModelRequest)
+    assert request.instructions == snapshot(
+        """\
+Optimized instructions.
+
+Use tenant policy: enterprise.\
+"""
+    )
+
+
+@pytest.mark.asyncio
+async def test_apply_candidate_preserves_async_instruction_callables():
+    """Async instruction decorators should also survive candidate overrides."""
+    agent = Agent(
+        TestModel(custom_output_text="Response"),
+        instructions="Original instructions.",
+        output_type=str,
+        name="async_callable_agent",
+    )
+
+    @agent.instructions
+    async def dynamic_instructions() -> str:
+        return "Async runtime instructions."
+
+    with apply_candidate_to_agent(agent, {"instructions": "Optimized instructions."}):
+        result = await agent.run("Test prompt")
+
+    request = result.all_messages()[0]
+    assert isinstance(request, ModelRequest)
+    assert request.instructions == snapshot(
+        """\
+Optimized instructions.
+
+Async runtime instructions.\
+"""
+    )
+
+
+def test_system_prompt_parts_are_not_folded_into_instruction_candidate():
+    """System prompt decorators remain pydantic-ai system prompt parts."""
+    agent = Agent(
+        TestModel(custom_output_text="Response"),
+        instructions="Original instructions.",
+        output_type=str,
+        name="system_prompt_agent",
+    )
+
+    @agent.system_prompt
+    def system_prompt() -> str:
+        return "Runtime system prompt."
+
+    with apply_candidate_to_agent(agent, {"instructions": "Optimized instructions."}):
+        result = agent.run_sync("Test prompt")
+
+    request = result.all_messages()[0]
+    assert isinstance(request, ModelRequest)
+    assert request.instructions == "Optimized instructions."
+    assert [
+        part.content for part in request.parts if isinstance(part, SystemPromptPart)
+    ] == ["Runtime system prompt."]
+
+
+def test_signature_agent_candidate_preserves_instruction_callables():
+    """Signature runs should keep original instruction decorators with candidates."""
+    test_model = TestModel(
+        custom_output_args=GeographyAnswer(
+            answer="Lisbon",
+            confidence="high",
+            sources=["Test data"],
+        ),
+    )
+
+    agent = Agent(
+        test_model,
+        instructions="Original geography instructions.",
+        deps_type=str,
+        output_type=GeographyAnswer,
+        name="signature_callable_agent",
+    )
+
+    @agent.instructions
+    def dynamic_instructions(ctx: RunContext[str]) -> str:
+        return f"Use regional policy: {ctx.deps}."
+
+    signature_agent = SignatureAgent(
+        agent,
+        input_type=GeographyQuery,
+        output_type=GeographyAnswer,
+        append_instructions=True,
+    )
+    sig = GeographyQuery(question="What's the capital of Portugal?", region="Europe")
+
+    result = signature_agent.run_signature_sync(
+        sig,
+        candidate={"instructions": "Optimized geography instructions."},
+        deps="eu",
+    )
+
+    request = result.all_messages()[0]
+    assert isinstance(request, ModelRequest)
+    assert request.instructions == snapshot(
+        """\
+Optimized geography instructions.
+Ask a question about geography.
+
+Inputs
+
+- `<question>` (str): The geography question to ask
+- `<region>` (UnionType[str, NoneType]): Specific region to focus on, if applicable
+
+Use regional policy: eu.\
+"""
+    )
 
 
 def test_signature_agent_without_output_type():

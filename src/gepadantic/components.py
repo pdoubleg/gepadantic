@@ -8,10 +8,15 @@ from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
 from pydantic import BaseModel, Field
 from pydantic.fields import FieldInfo
-from pydantic_ai.agent.wrapper import WrapperAgent
 
 from .signature import InputSpec, build_input_spec
 from .signature_agent import SignatureAgent
+from .instructions import (
+    compose_instructions,
+    instruction_callables,
+    instruction_literal_text,
+    unwrap_agent,
+)
 from .tool_components import get_output_tool_optimizer, get_tool_optimizer
 
 if TYPE_CHECKING:
@@ -72,19 +77,10 @@ def extract_seed_candidate(agent: AbstractAgent[Any, Any]) -> dict[str, str]:
     """
     candidate: dict[str, str] = {}
 
-    target_agent = agent
-    if isinstance(agent, WrapperAgent):
-        target_agent = agent.wrapped
-
     # Extract instructions
-    # Note: In v1, we extract the literal instructions only, not the dynamic ones
-    # The dynamic instructions from functions will be disabled during optimization
-    if hasattr(target_agent, "_instructions") and target_agent._instructions:  # type: ignore[attr-defined]
-        candidate["instructions"] = normalize_component_text(
-            target_agent._instructions  # type: ignore[attr-defined]
-        )
-    else:
-        candidate["instructions"] = ""
+    # Callable instructions are preserved at runtime, but only literal instruction
+    # text is exposed as a GEPA-optimizable component.
+    candidate["instructions"] = instruction_literal_text(agent)
 
     if isinstance(agent, SignatureAgent):
         if agent.optimize_tools:
@@ -124,9 +120,7 @@ def apply_candidate_to_agent(
         normalize_component_text(instructions_raw) if instructions_raw else None
     )
 
-    target_agent = agent
-    if isinstance(agent, WrapperAgent):
-        target_agent = agent.wrapped
+    target_agent = unwrap_agent(agent)
 
     optimizer = get_tool_optimizer(agent)
     output_optimizer = get_output_tool_optimizer(agent)
@@ -137,7 +131,13 @@ def apply_candidate_to_agent(
         if output_optimizer:
             stack.enter_context(output_optimizer.candidate_context(candidate))
         if instructions:
-            stack.enter_context(target_agent.override(instructions=instructions))
+            instructions_override = compose_instructions(
+                instructions,
+                instruction_callables(agent),
+            )
+            stack.enter_context(
+                target_agent.override(instructions=instructions_override)
+            )
         yield
 
 

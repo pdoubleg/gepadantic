@@ -51,8 +51,12 @@ class REPLVariable(BaseModel):
 
     name: str = Field(description="Variable name as it appears in the sandbox.")
     type_name: str = Field(description="Python type name, e.g. 'str', 'list'.")
-    desc: str = Field(default="", description="Human-readable description of the variable.")
-    preview: str = Field(default="", description="Truncated string preview of the value.")
+    desc: str = Field(
+        default="", description="Human-readable description of the variable."
+    )
+    preview: str = Field(
+        default="", description="Truncated string preview of the value."
+    )
 
     @classmethod
     def from_value(
@@ -115,9 +119,13 @@ class REPLEntry(BaseModel):
         ... )
     """
 
-    reasoning: str = Field(default="", description="The LLM's chain-of-thought reasoning.")
+    reasoning: str = Field(
+        default="", description="The LLM's chain-of-thought reasoning."
+    )
     code: str = Field(default="", description="Python code that was executed.")
-    output: str = Field(default="", description="Stdout / result from executing the code.")
+    output: str = Field(
+        default="", description="Stdout / result from executing the code."
+    )
 
     @staticmethod
     def format_output(output: str, max_chars: int) -> str:
@@ -281,7 +289,9 @@ class RLMResult(BaseModel, Generic[OutputT]):
         >>> print(result.usage.total_tokens)
     """
 
-    output: Any = Field(description="Parsed structured output (instance of the user's output_type).")
+    output: Any = Field(
+        description="Parsed structured output (instance of the user's output_type)."
+    )
     trajectory: list[dict[str, Any]] = Field(
         default_factory=list,
         description="Serialised REPL history entries for debugging.",

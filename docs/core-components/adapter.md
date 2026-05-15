@@ -176,6 +176,38 @@ new_candidate = adapter.propose_new_texts(
 )
 ```
 
+### Instructions, Callables, and System Prompts
+
+pydantic-ai has two related prompt channels:
+
+- `instructions` becomes the agent's rendered instruction text. For OpenAI Chat Completions this is sent as the first `system` message; for OpenAI Responses it is sent as the top-level `instructions` value.
+- `system_prompt` and `@agent.system_prompt` become separate system prompt parts in the message/input array.
+
+GEPAdantic optimizes the static `instructions` component:
+
+```python
+agent = Agent(
+    "openai:gpt-4o",
+    instructions="Classify the ticket by urgency and category.",
+)
+```
+
+If you register pydantic-ai instruction callables with `@agent.instructions`, GEPAdantic preserves and appends those callables when evaluating optimized candidates, but it does not ask GEPA to rewrite the callable output:
+
+```python
+@agent.instructions
+def tenant_policy(ctx: RunContext[Deps]) -> str:
+    return f"Use the policy for tenant {ctx.deps.tenant_id}."
+```
+
+This is the recommended split:
+
+- Put stable task guidance that GEPA should improve in `instructions=...`.
+- Put runtime-specific or dependency-specific guidance in `@agent.instructions`.
+- Use `system_prompt` or `@agent.system_prompt` only when you specifically want separate system prompt message parts; these are preserved by pydantic-ai, but they are not optimized as the `instructions` component.
+
+One pydantic-ai ordering detail matters when mixing strings and instruction callables: literal instruction strings are rendered first, then callable instruction outputs are appended in registration order.
+
 ## Additional Features
 
 ### Input Type Optimization

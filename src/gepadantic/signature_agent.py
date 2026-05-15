@@ -25,6 +25,7 @@ from pydantic_ai.tools import AgentDepsT, DeferredToolResults
 from pydantic_ai.toolsets import AbstractToolset
 
 from .signature import BoundInputSpec, InputSpec, build_input_spec
+from .instructions import compose_instructions, instruction_callables
 from .tool_components import (
     OutputToolOptimizationManager,
     ToolOptimizationManager,
@@ -281,18 +282,14 @@ class SignatureAgent(WrapperAgent[AgentDepsT, OutputDataT]):
         self,
         base_instructions: Instructions[AgentDepsT] | None,
         system_instructions: str | None,
+        preserved_callables: Sequence[Any] = (),
     ) -> Instructions[AgentDepsT] | None:
         """Combine candidate/base instructions with signature instructions."""
-        if system_instructions:
-            if base_instructions:
-                if isinstance(base_instructions, Sequence) and not isinstance(
-                    base_instructions, str
-                ):
-                    return (*base_instructions, system_instructions)
-                return (base_instructions, system_instructions)
-            return system_instructions
-
-        return base_instructions
+        return compose_instructions(
+            base_instructions,
+            preserved_callables,
+            system_instructions,
+        )
 
     def _prepare_run_arguments(
         self,
@@ -330,8 +327,13 @@ class SignatureAgent(WrapperAgent[AgentDepsT, OutputDataT]):
             if candidate and "instructions" in candidate
             else getattr(self.wrapped, "_instructions", None)
         )
+        preserved_callables = (
+            instruction_callables(self.wrapped)
+            if candidate and "instructions" in candidate
+            else ()
+        )
         instructions_override = self._compose_instructions_override(
-            base_instructions, system_instructions
+            base_instructions, system_instructions, preserved_callables
         )
         return run_user_prompt, instructions_override
 
